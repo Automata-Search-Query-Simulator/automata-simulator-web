@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, Play, RefreshCcw, Square, Upload } from "lucide-react";
-import { apiClient, SIMULATE_ENDPOINT } from "@/config/api";
+import { API_BASE_URL, apiClient, SIMULATE_ENDPOINT } from "@/config/api";
 import { MODES, SAMPLE_PRESETS } from "@/features/simulator/constants";
 import { formSchema } from "@/features/simulator/schema";
 import {
@@ -69,7 +69,8 @@ export default function HomePage() {
 
   const [result, setResult] = useState<NormalizedResult | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
-  const [activeController, setActiveController] = useState<AbortController | null>(null);
+  const [activeController, setActiveController] =
+    useState<AbortController | null>(null);
 
   const mutation = useMutation({
     mutationFn: async ({ params, controller }: SimulationVariables) => {
@@ -134,7 +135,7 @@ export default function HomePage() {
             variables.modeLabel,
             variables.contextSequences,
             variables.mismatchBudget,
-            payloadResult.runtimeMs,
+            payloadResult.runtimeMs
           );
           setResult(normalized);
           pushHistory({
@@ -154,7 +155,8 @@ export default function HomePage() {
           if (axios.isAxiosError(error)) {
             if (error.code === "ERR_NETWORK") {
               setNetworkError(
-                "Unable to reach the Flask backend. Verify the server is running on 127.0.0.1:5000.",
+                "Unable to reach the backend. Verify the server is running on " +
+                  API_BASE_URL
               );
             } else {
               setNetworkError(
@@ -162,21 +164,19 @@ export default function HomePage() {
                   error.response?.data !== null &&
                   "message" in error.response.data
                   ? String(error.response.data.message)
-                  : error.message ?? "Simulation failed. Review your inputs.",
+                  : error.message ?? "Simulation failed. Review your inputs."
               );
             }
           } else if (error instanceof Error) {
             setNetworkError(
-              error.message || "Simulation failed. Review your inputs.",
+              error.message || "Simulation failed. Review your inputs."
             );
           } else {
-            setNetworkError(
-              "Simulation failed. Review your inputs.",
-            );
+            setNetworkError("Simulation failed. Review your inputs.");
           }
           setActiveController(null);
         },
-      },
+      }
     );
   };
 
@@ -190,7 +190,6 @@ export default function HomePage() {
       activeController?.abort();
     };
   }, [activeController]);
-
 
   const handleHistoryLoad = (item: SimulationHistoryItem) => {
     form.setValue("mode", item.mode as FormValues["mode"]);
@@ -224,7 +223,9 @@ export default function HomePage() {
         <Card>
           <CardHeader>
             <CardTitle>Running simulation…</CardTitle>
-            <CardDescription>Fetching automaton trace from backend</CardDescription>
+            <CardDescription>
+              Fetching automaton trace from backend
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Skeleton className="h-24 w-full" />
@@ -241,8 +242,8 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle>No simulation yet</CardTitle>
             <CardDescription>
-              Choose a mode, add sequences or a file path, then run the automaton to see
-              traces and summaries.
+              Choose a mode, add sequences or a file path, then run the
+              automaton to see traces and summaries.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -256,18 +257,25 @@ export default function HomePage() {
             <div>
               <CardTitle>{result.summary.modeLabel}</CardTitle>
               <CardDescription>
-                Completed at {new Date(result.summary.timestamp).toLocaleTimeString()}
+                Completed at{" "}
+                {new Date(result.summary.timestamp).toLocaleTimeString()}
               </CardDescription>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm text-zinc-600 dark:text-zinc-400 sm:grid-cols-3">
               <div>
-                <p className="text-xs uppercase tracking-wide text-zinc-500">Runtime</p>
+                <p className="text-xs uppercase tracking-wide text-zinc-500">
+                  Runtime
+                </p>
                 <p className="text-base font-semibold">
-                  {result.summary.runtimeMs ? `${result.summary.runtimeMs} ms` : "—"}
+                  {result.summary.runtimeMs
+                    ? `${result.summary.runtimeMs} ms`
+                    : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-zinc-500">Matches</p>
+                <p className="text-xs uppercase tracking-wide text-zinc-500">
+                  Matches
+                </p>
                 <p className="text-base font-semibold">
                   {result.summary.matches}/{result.summary.sequenceCount}
                 </p>
@@ -295,7 +303,9 @@ export default function HomePage() {
               <p className="text-xs uppercase tracking-wide text-zinc-500">
                 Sequence Count
               </p>
-              <p className="text-2xl font-semibold">{result.summary.sequenceCount}</p>
+              <p className="text-2xl font-semibold">
+                {result.summary.sequenceCount}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -340,7 +350,9 @@ export default function HomePage() {
                     <td className="py-3">
                       {seq.mismatches !== undefined ? (
                         <>
-                          <span className="font-semibold">{seq.mismatches}</span>
+                          <span className="font-semibold">
+                            {seq.mismatches}
+                          </span>
                           {!!seq.mismatchPositions?.length && (
                             <span className="ml-2 text-xs text-zinc-500">
                               {seq.mismatchPositions.join(", ")}
@@ -366,20 +378,25 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle>Traces</CardTitle>
             <CardDescription>
-              Timeline of key transitions. Animation canvas reserved for future update.
+              Timeline of key transitions. Animation canvas reserved for future
+              update.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <ol className="space-y-4">
               {result.traces.length === 0 && (
-                <li className="text-sm text-zinc-500">No trace data returned.</li>
+                <li className="text-sm text-zinc-500">
+                  No trace data returned.
+                </li>
               )}
               {result.traces.map((trace) => (
                 <li key={trace.step} className="flex gap-3">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
                     {trace.step}
                   </span>
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300">{trace.label}</p>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                    {trace.label}
+                  </p>
                 </li>
               ))}
             </ol>
@@ -387,7 +404,9 @@ export default function HomePage() {
               <p className="font-medium text-zinc-700 dark:text-zinc-200">
                 Animated state diagram (coming soon)
               </p>
-              <p>Backend transition payloads will render here once available.</p>
+              <p>
+                Backend transition payloads will render here once available.
+              </p>
             </div>
             <details className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
               <summary className="cursor-pointer text-sm font-medium">
@@ -410,8 +429,9 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle>Automata pattern search visualizer</CardTitle>
             <CardDescription>
-              Select a mode, load sequences, and inspect how the backend automaton
-              processes your query. Use presets to get started quickly.
+              Select a mode, load sequences, and inspect how the backend
+              automaton processes your query. Use presets to get started
+              quickly.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -511,7 +531,9 @@ export default function HomePage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="mismatchBudget">Mismatch budget (EFA)</Label>
+                      <Label htmlFor="mismatchBudget">
+                        Mismatch budget (EFA)
+                      </Label>
                       <span className="text-sm font-semibold">
                         {mismatchBudget ?? 0}
                       </span>
@@ -522,7 +544,9 @@ export default function HomePage() {
                       max={5}
                       value={mismatchBudget ?? 0}
                       disabled={watchMode !== "efa"}
-                      onChange={(value) => form.setValue("mismatchBudget", value)}
+                      onChange={(value) =>
+                        form.setValue("mismatchBudget", value)
+                      }
                     />
                   </div>
 
@@ -550,30 +574,30 @@ export default function HomePage() {
 
               {showPayloadWarning && (
                 <Alert variant="destructive">
-                  Large textarea detected. Consider using a FASTA file path for better
-                  performance.
+                  Large textarea detected. Consider using a FASTA file path for
+                  better performance.
                 </Alert>
               )}
 
               <section className="space-y-3">
                 <Label>Parameter preview</Label>
                 <Card className="bg-zinc-50 dark:bg-zinc-900/50">
-                  <CardContent className="grid gap-3 py-4 text-sm">
-                    {Object.entries(previewPayload.payload).map(([key, value]) => (
-                      <div
-                        key={key}
-                        className="flex items-center justify-between gap-3 text-zinc-600 dark:text-zinc-300"
-                      >
-                        <span className="uppercase tracking-wide text-xs text-zinc-500">
-                          {key}
-                        </span>
-                        <span className="font-medium">
-                          {typeof value === "string" && value.length > 64
-                            ? `${value.slice(0, 64)}…`
-                            : String(value)}
-                        </span>
-                      </div>
-                    ))}
+                  <CardContent className="grid gap-3 overflow-hidden py-4 text-sm">
+                    {Object.entries(previewPayload.payload).map(
+                      ([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex flex-col gap-1 text-zinc-600 dark:text-zinc-300 sm:flex-row sm:items-start sm:justify-between"
+                        >
+                          <span className="shrink-0 uppercase tracking-wide text-xs text-zinc-500">
+                            {key}
+                          </span>
+                          <span className="min-w-0 flex-1 break-all font-medium sm:text-right">
+                            {String(value)}
+                          </span>
+                        </div>
+                      )
+                    )}
                   </CardContent>
                 </Card>
               </section>
@@ -583,17 +607,17 @@ export default function HomePage() {
             <Button
               type="submit"
               form="simulation-form"
-              className="w-full gap-2"
+              className="h-12 w-full gap-2 text-base"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                   Running
                 </>
               ) : (
                 <>
-                  <Play className="h-4 w-4" />
+                  <Play className="h-5 w-5" />
                   Run simulation
                 </>
               )}
@@ -601,17 +625,17 @@ export default function HomePage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full gap-2"
+              className="h-12 w-full gap-2 text-base"
               onClick={isSubmitting ? handleCancel : () => form.reset()}
             >
               {isSubmitting ? (
                 <>
-                  <Square className="h-4 w-4" />
+                  <Square className="h-5 w-5" />
                   Cancel
                 </>
               ) : (
                 <>
-                  <RefreshCcw className="h-4 w-4" />
+                  <RefreshCcw className="h-5 w-5" />
                   Reset form
                 </>
               )}
@@ -627,7 +651,9 @@ export default function HomePage() {
           <Card>
             <CardHeader>
               <CardTitle>Recent simulations</CardTitle>
-              <CardDescription>Load one of the last five requests.</CardDescription>
+              <CardDescription>
+                Load one of the last five requests.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {history.length === 0 ? (
@@ -644,7 +670,8 @@ export default function HomePage() {
                         {item.summary.modeLabel}
                       </span>
                       <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                        {item.summary.matches}/{item.summary.sequenceCount} matches
+                        {item.summary.matches}/{item.summary.sequenceCount}{" "}
+                        matches
                       </span>
                       <span className="text-xs text-zinc-500">
                         {new Date(item.timestamp).toLocaleString()}
@@ -672,26 +699,30 @@ export default function HomePage() {
                 <TabsContent value="request">
                   <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
                     <p>
-                      Every run hits <code className="font-mono">/simulate</code> with the
+                      Every run hits{" "}
+                      <code className="font-mono">/simulate</code> with the
                       parameters listed in the preview card. At least one of
                       <code className="font-mono"> sequences</code> or
-                      <code className="font-mono"> input_path</code> is required.
+                      <code className="font-mono"> input_path</code> is
+                      required.
                     </p>
                     <p>
-                      Requests automatically normalize casing (DNA) and enforce mismatch &
-                      dot-bracket switches based on the active mode.
+                      Requests automatically normalize casing (DNA) and enforce
+                      mismatch & dot-bracket switches based on the active mode.
                     </p>
                   </div>
                 </TabsContent>
                 <TabsContent value="response">
                   <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
                     <p>
-                      The response summary surfaces match counts, runtime, and stack depth.
-                      Sequence table lists acceptance status, mismatch chips, and notes.
+                      The response summary surfaces match counts, runtime, and
+                      stack depth. Sequence table lists acceptance status,
+                      mismatch chips, and notes.
                     </p>
                     <p>
-                      Trace entries populate the timeline; once backend returns transition
-                      graphs, they will animate in the reserved canvas.
+                      Trace entries populate the timeline; once backend returns
+                      transition graphs, they will animate in the reserved
+                      canvas.
                     </p>
                   </div>
                 </TabsContent>
