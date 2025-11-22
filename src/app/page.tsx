@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,6 +40,7 @@ import {
   SimulationVariables,
 } from "@/features/simulator/types";
 import { useRecentSimulations } from "@/features/simulator/hooks/use-recent-simulations";
+import { StateDiagram } from "@/components/automaton/state-diagram";
 
 export default function HomePage() {
   const form = useForm<FormValues>({
@@ -217,20 +218,56 @@ export default function HomePage() {
 
   const isSubmitting = mutation.isPending;
 
+  const deriveStatePath = useMemo(() => {
+    if (!result?.automaton) return [];
+    const automaton = result.automaton;
+    const path: number[] = [automaton.start];
+    // Try to find a path to accept state
+    const visited = new Set<number>([automaton.start]);
+    const queue: number[] = [automaton.start];
+
+    while (queue.length > 0 && path.length < 20) {
+      const current = queue.shift()!;
+      const state = automaton.states.find((s) => s.id === current);
+      if (!state) break;
+
+      if (state.id === automaton.accept || state.accept) {
+        path.push(state.id);
+        break;
+      }
+
+      for (const edge of state.edges) {
+        if (!visited.has(edge.to)) {
+          visited.add(edge.to);
+          queue.push(edge.to);
+          path.push(edge.to);
+          break;
+        }
+      }
+    }
+
+    return path;
+  }, [result?.automaton]);
+
   const renderResults = () => {
     if (isSubmitting) {
       return (
-        <Card>
-          <CardHeader>
-            <CardTitle>Running simulation…</CardTitle>
-            <CardDescription>
-              Fetching automaton trace from backend
-            </CardDescription>
+        <Card className="shadow-lg border-2 border-blue-200 dark:border-blue-900/50">
+          <CardHeader className="border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
+              <div>
+                <CardTitle className="text-xl font-bold">Running Simulation…</CardTitle>
+                <CardDescription className="mt-1">
+                  Fetching automaton trace from backend
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-48 w-full" />
-            <Skeleton className="h-64 w-full" />
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-48 w-full rounded-lg" />
+            <Skeleton className="h-64 w-full rounded-lg" />
           </CardContent>
         </Card>
       );
@@ -238,10 +275,13 @@ export default function HomePage() {
 
     if (!result) {
       return (
-        <Card>
-          <CardHeader>
-            <CardTitle>No simulation yet</CardTitle>
-            <CardDescription>
+        <Card className="shadow-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700">
+          <CardHeader className="text-center py-12">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30">
+              <Play className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+            <CardTitle className="text-xl font-bold mb-2">No Simulation Yet</CardTitle>
+            <CardDescription className="text-base max-w-md mx-auto">
               Choose a mode, add sequences or a file path, then run the
               automaton to see traces and summaries.
             </CardDescription>
@@ -251,168 +291,277 @@ export default function HomePage() {
     }
 
     return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <CardTitle>{result.summary.modeLabel}</CardTitle>
-              <CardDescription>
-                Completed at{" "}
-                {new Date(result.summary.timestamp).toLocaleTimeString()}
-              </CardDescription>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm text-zinc-600 dark:text-zinc-400 sm:grid-cols-3">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-zinc-500">
-                  Runtime
-                </p>
-                <p className="text-base font-semibold">
-                  {result.summary.runtimeMs
-                    ? `${result.summary.runtimeMs} ms`
-                    : "—"}
-                </p>
+      <div className="space-y-8">
+        <Card className="shadow-lg border-2 border-green-200 dark:border-green-900/50 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-b-2 border-green-200 dark:border-green-900/50">
+            <div className="flex flex-wrap items-start justify-between gap-6">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                  <CardTitle className="text-xl font-bold">{result.summary.modeLabel}</CardTitle>
+                </div>
+                <CardDescription className="text-sm">
+                  Completed at{" "}
+                  <span className="font-medium">{new Date(result.summary.timestamp).toLocaleTimeString()}</span>
+                </CardDescription>
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-zinc-500">
-                  Matches
-                </p>
-                <p className="text-base font-semibold">
-                  {result.summary.matches}/{result.summary.sequenceCount}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-zinc-500">
-                  Mismatch Budget
-                </p>
-                <p className="text-base font-semibold">
-                  {result.summary.mismatchBudget}
-                </p>
+              <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
+                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
+                  <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                    Runtime
+                  </p>
+                  <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                    {result.summary.runtimeMs
+                      ? `${result.summary.runtimeMs} ms`
+                      : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
+                  <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                    Matches
+                  </p>
+                  <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                    {result.summary.matches}/{result.summary.sequenceCount}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
+                  <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                    Mismatch Budget
+                  </p>
+                  <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                    {result.summary.mismatchBudget}
+                  </p>
+                </div>
+                {result.summary.averageCoverage !== undefined && (
+                  <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
+                    <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                      Avg Coverage
+                    </p>
+                    <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                      {(result.summary.averageCoverage * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                )}
+                {result.summary.totalStatesVisited !== undefined && (
+                  <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
+                    <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                      States Visited
+                    </p>
+                    <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                      {result.summary.totalStatesVisited}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-dashed border-zinc-200 p-4 text-sm dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 pt-6">
+            <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+              <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
                 Max Stack Depth
               </p>
-              <p className="text-2xl font-semibold">
+              <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
                 {result.summary.maxStackDepth ?? "—"}
               </p>
             </div>
-            <div className="rounded-lg border border-dashed border-zinc-200 p-4 text-sm dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
+            <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+              <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
                 Sequence Count
               </p>
-              <p className="text-2xl font-semibold">
+              <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
                 {result.summary.sequenceCount}
               </p>
             </div>
+            {result.summary.allAccepted !== undefined && (
+              <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+                <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
+                  All Accepted
+                </p>
+                <p className="text-3xl font-bold">
+                  {result.summary.allAccepted ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">Yes</span>
+                  ) : (
+                    <span className="text-red-600 dark:text-red-400">No</span>
+                  )}
+                </p>
+              </div>
+            )}
+            {result.summary.sequencesWithMatches !== undefined && (
+              <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+                <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
+                  With Matches
+                </p>
+                <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+                  {result.summary.sequencesWithMatches}/
+                  {result.summary.sequenceCount}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sequence outcomes</CardTitle>
-            <CardDescription>
+        <Card className="shadow-lg">
+          <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
+            <CardTitle className="text-xl font-bold">Sequence Outcomes</CardTitle>
+            <CardDescription className="mt-1">
               Accepted states, mismatches, and stack summaries per sequence.
             </CardDescription>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
-                  <th className="pb-2">Sequence</th>
-                  <th className="pb-2">Accepted</th>
-                  <th className="pb-2">Mismatches</th>
-                  <th className="pb-2">Stack Depth</th>
-                  <th className="pb-2">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {result.sequences.map((seq) => (
-                  <tr key={seq.id}>
-                    <td className="py-3 font-mono text-xs text-zinc-900 dark:text-zinc-100">
-                      <div className="max-w-xs truncate">{seq.sequence}</div>
+          <CardContent className="overflow-x-auto p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px] text-sm">
+                <thead className="bg-gradient-to-r from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:to-zinc-800 border-b-2 border-zinc-200 dark:border-zinc-700">
+                  <tr className="text-left">
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Sequence</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Accepted</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Matches</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Coverage</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">States Visited</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Stack Depth</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {result.sequences.map((seq, idx) => (
+                  <tr key={seq.id} className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+                    <td className="px-4 py-4 font-mono text-xs text-zinc-900 dark:text-zinc-100">
+                      <div className="max-w-xs truncate font-medium">{seq.sequence}</div>
+                      {seq.matchRanges && seq.matchRanges.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {seq.matchRanges.map((range, idx) => (
+                            <span
+                              key={idx}
+                              className="rounded-md bg-gradient-to-r from-blue-100 to-blue-200 px-2 py-1 text-xs font-semibold text-blue-700 shadow-sm dark:from-blue-900/50 dark:to-blue-800/50 dark:text-blue-200"
+                            >
+                              {range.range}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
-                    <td className="py-3">
+                    <td className="px-4 py-4">
                       {seq.accepted === undefined ? (
-                        <span className="text-zinc-400">pending</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-400"></span>
+                          pending
+                        </span>
                       ) : seq.accepted ? (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 shadow-sm dark:from-emerald-900/50 dark:to-green-900/50 dark:text-emerald-200">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                           accepted
                         </span>
                       ) : (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-200">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-red-100 to-rose-100 px-2.5 py-1 text-xs font-semibold text-red-700 shadow-sm dark:from-red-900/50 dark:to-rose-900/50 dark:text-red-200">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
                           rejected
                         </span>
                       )}
                     </td>
-                    <td className="py-3">
-                      {seq.mismatches !== undefined ? (
-                        <>
-                          <span className="font-semibold">
+                    <td className="px-4 py-4">
+                      {seq.matchRanges ? (
+                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                          {seq.matchRanges.length}
+                        </span>
+                      ) : seq.mismatches !== undefined ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="font-bold text-zinc-900 dark:text-zinc-100">
                             {seq.mismatches}
                           </span>
                           {!!seq.mismatchPositions?.length && (
-                            <span className="ml-2 text-xs text-zinc-500">
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
                               {seq.mismatchPositions.join(", ")}
                             </span>
                           )}
-                        </>
+                        </div>
                       ) : (
-                        "—"
+                        <span className="text-zinc-400">—</span>
                       )}
                     </td>
-                    <td className="py-3">{seq.stackDepth ?? "—"}</td>
-                    <td className="py-3 text-zinc-600 dark:text-zinc-400">
-                      {seq.notes ?? "—"}
+                    <td className="px-4 py-4">
+                      {seq.coverage !== undefined ? (
+                        <span className="font-bold text-purple-600 dark:text-purple-400">
+                          {(seq.coverage * 100).toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      {seq.statesVisited !== undefined ? (
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                          {seq.statesVisited}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                        {seq.stackDepth ?? <span className="text-zinc-400">—</span>}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-zinc-600 dark:text-zinc-400 text-xs">
+                      {seq.notes ?? <span className="text-zinc-400">—</span>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Traces</CardTitle>
-            <CardDescription>
-              Timeline of key transitions. Animation canvas reserved for future
-              update.
+        <Card className="shadow-lg">
+          <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
+            <CardTitle className="text-xl font-bold">State Diagram</CardTitle>
+            <CardDescription className="mt-1">
+              Visual representation of the automaton with step-by-step
+              highlighting.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <ol className="space-y-4">
-              {result.traces.length === 0 && (
-                <li className="text-sm text-zinc-500">
-                  No trace data returned.
-                </li>
-              )}
-              {result.traces.map((trace) => (
-                <li key={trace.step} className="flex gap-3">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
-                    {trace.step}
-                  </span>
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                    {trace.label}
-                  </p>
-                </li>
-              ))}
-            </ol>
-            <div className="relative rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-              <p className="font-medium text-zinc-700 dark:text-zinc-200">
-                Animated state diagram (coming soon)
-              </p>
-              <p>
-                Backend transition payloads will render here once available.
-              </p>
-            </div>
-            <details className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <summary className="cursor-pointer text-sm font-medium">
-                Raw response debug
+          <CardContent className="space-y-6 pt-6">
+            {result.automaton ? (
+              <div className="rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-6 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900">
+                <StateDiagram
+                  automaton={result.automaton}
+                  activeStates={deriveStatePath}
+                />
+              </div>
+            ) : (
+              <div className="relative rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-12 text-center dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800">
+                  <svg className="h-6 w-6 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <p className="font-semibold text-zinc-700 dark:text-zinc-200 mb-1">
+                  No automaton data available
+                </p>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">Run a simulation to see the state diagram</p>
+              </div>
+            )}
+            {result.traces.length > 0 && (
+              <div className="rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-6 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900">
+                <h3 className="mb-4 text-base font-bold text-zinc-900 dark:text-zinc-100">Execution Traces</h3>
+                <ol className="space-y-3">
+                  {result.traces.map((trace) => (
+                    <li key={trace.step} className="flex items-start gap-4 rounded-lg bg-white p-3 shadow-sm dark:bg-zinc-900 transition-all hover:shadow-md">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white shadow-md">
+                        {trace.step}
+                      </span>
+                      <p className="pt-0.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                        {trace.label}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            <details className="group rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-4 transition-all hover:border-zinc-300 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900 dark:hover:border-zinc-700">
+              <summary className="cursor-pointer text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition-colors group-hover:text-zinc-900 dark:group-hover:text-zinc-100">
+                Raw Response Debug
               </summary>
-              <pre className="mt-3 max-h-64 overflow-auto rounded bg-black/80 p-4 text-xs text-green-200">
+              <pre className="mt-4 max-h-64 overflow-auto rounded-lg bg-gradient-to-br from-zinc-900 to-zinc-800 p-4 text-xs text-green-200 shadow-inner border border-zinc-700">
                 {JSON.stringify(result.raw, null, 2)}
               </pre>
             </details>
@@ -423,30 +572,38 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-white px-4 py-6 dark:from-zinc-950 dark:to-black sm:px-8">
-      <main className="mx-auto grid max-w-6xl gap-6 xl:grid-cols-[minmax(0,420px)_1fr]">
-        <Card className="order-2 xl:order-1">
-          <CardHeader>
-            <CardTitle>Automata pattern search visualizer</CardTitle>
-            <CardDescription>
-              Select a mode, load sequences, and inspect how the backend
-              automaton processes your query. Use presets to get started
-              quickly.
-            </CardDescription>
+    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 px-4 py-8 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 sm:px-6 lg:px-8">
+      <main className="mx-auto grid max-w-7xl gap-8 xl:grid-cols-[440px_1fr]">
+        <Card className="order-2 xl:order-1 xl:w-[440px] xl:shrink-0 shadow-lg transition-shadow hover:shadow-xl">
+          <CardHeader className="border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold bg-gradient-to-r from-zinc-900 to-zinc-700 bg-clip-text text-transparent dark:from-zinc-100 dark:to-zinc-300">
+                  Automata Pattern Search
+                </CardTitle>
+                <CardDescription className="text-sm leading-relaxed">
+                  Select a mode, load sequences, and inspect how the backend
+                  automaton processes your query. Use presets to get started
+                  quickly.
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8 pt-6">
             <form
-              className="space-y-6"
+              className="space-y-8"
               onSubmit={form.handleSubmit(onSubmit)}
               id="simulation-form"
             >
-              <section className="space-y-3">
+              <section className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
-                  <Label>Mode</Label>
+                  <Label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Mode
+                  </Label>
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-8 gap-2 px-3 text-xs"
+                    className="h-8 gap-2 px-3 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     onClick={handlePreset}
                   >
                     <Upload className="h-3.5 w-3.5" />
@@ -461,80 +618,101 @@ export default function HomePage() {
                   className="w-full"
                 >
                   {MODES.map((mode) => (
-                    <ToggleGroupItem key={mode.value} value={mode.value}>
+                    <ToggleGroupItem
+                      key={mode.value}
+                      value={mode.value}
+                      className="transition-all hover:scale-105"
+                    >
                       {mode.label}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
-                <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
-                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100">
+                <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-4 text-sm text-zinc-700 dark:from-blue-950/30 dark:to-indigo-950/30 dark:text-zinc-300 border border-blue-100 dark:border-blue-900/50">
+                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100 mb-1.5">
                     {modeMeta.description}
                   </span>
-                  {modeMeta.helper}
-                </p>
+                  <span className="text-xs leading-relaxed">{modeMeta.helper}</span>
+                </div>
               </section>
 
-              <section className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="sequences">Sequences (one per line)</Label>
+              <section className="space-y-5">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sequences" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Sequences
+                    </Label>
+                    <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
+                      {sequenceArray.length} detected
+                    </span>
+                  </div>
                   <Textarea
                     id="sequences"
-                    placeholder="ACGT...\nACAT..."
+                    placeholder="ACGT...&#10;ACAT..."
                     rows={6}
+                    className="font-mono text-sm transition-all focus:ring-2 focus:ring-blue-500"
                     {...form.register("sequences")}
                   />
                   <div className="flex items-center justify-between text-xs text-zinc-500">
-                    <span>{sequenceArray.length} sequences detected</span>
-                    <span>Auto-uppercases DNA inputs</span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                      Auto-uppercases DNA inputs
+                    </span>
                   </div>
                   {form.formState.errors.sequences && (
-                    <p className="text-sm text-red-600">
+                    <p className="text-sm text-red-600 font-medium">
                       {form.formState.errors.sequences.message}
                     </p>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="inputPath">FASTA / text file path</Label>
+                <div className="space-y-3">
+                  <Label htmlFor="inputPath" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    FASTA / Text File Path
+                  </Label>
                   <Input
                     id="inputPath"
                     placeholder="/Users/.../dataset.fasta"
+                    className="font-mono text-sm transition-all focus:ring-2 focus:ring-blue-500"
                     {...form.register("inputPath")}
                   />
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-zinc-500 leading-relaxed">
                     Provide an absolute path accessible to the Flask backend.
                   </p>
                   {form.formState.errors.inputPath && (
-                    <p className="text-sm text-red-600">
+                    <p className="text-sm text-red-600 font-medium">
                       {form.formState.errors.inputPath.message}
                     </p>
                   )}
                 </div>
               </section>
 
-              <section className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="pattern">Pattern / grammar</Label>
+              <section className="space-y-5">
+                <div className="space-y-3">
+                  <Label htmlFor="pattern" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Pattern / Grammar
+                  </Label>
                   <Textarea
                     id="pattern"
                     placeholder="A(CG|TT)*"
                     rows={3}
+                    className="font-mono text-sm transition-all focus:ring-2 focus:ring-blue-500"
                     {...form.register("pattern")}
                   />
                   {form.formState.errors.pattern && (
-                    <p className="text-sm text-red-600">
+                    <p className="text-sm text-red-600 font-medium">
                       {form.formState.errors.pattern.message}
                     </p>
                   )}
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                  <div className="space-y-4 rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-5 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-300 dark:hover:border-blue-700">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="mismatchBudget">
-                        Mismatch budget (EFA)
+                      <Label htmlFor="mismatchBudget" className="text-sm font-semibold">
+                        Mismatch Budget
+                        <span className="ml-2 text-xs font-normal text-zinc-500">(EFA)</span>
                       </Label>
-                      <span className="text-sm font-semibold">
+                      <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
                         {mismatchBudget ?? 0}
                       </span>
                     </div>
@@ -550,9 +728,11 @@ export default function HomePage() {
                     />
                   </div>
 
-                  <div className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                  <div className="space-y-4 rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-5 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-300 dark:hover:border-blue-700">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="allowDotBracket">Allow dot-bracket</Label>
+                      <Label htmlFor="allowDotBracket" className="text-sm font-semibold">
+                        Allow Dot-Bracket
+                      </Label>
                       <Switch
                         id="allowDotBracket"
                         checked={watchDotBracket ?? false}
@@ -565,7 +745,7 @@ export default function HomePage() {
                         disabled={watchMode !== "pda"}
                       />
                     </div>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-zinc-500 leading-relaxed">
                       Enable dot-bracket parsing when validating RNA structures.
                     </p>
                   </div>
@@ -573,26 +753,28 @@ export default function HomePage() {
               </section>
 
               {showPayloadWarning && (
-                <Alert variant="destructive">
-                  Large textarea detected. Consider using a FASTA file path for
+                <Alert variant="destructive" className="border-2 border-red-200 dark:border-red-900/50">
+                  <span className="font-semibold">Large textarea detected.</span> Consider using a FASTA file path for
                   better performance.
                 </Alert>
               )}
 
               <section className="space-y-3">
-                <Label>Parameter preview</Label>
-                <Card className="bg-zinc-50 dark:bg-zinc-900/50">
+                <Label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Parameter Preview
+                </Label>
+                <Card className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 dark:from-zinc-900/50 dark:to-zinc-900 border-2 border-zinc-200 dark:border-zinc-800">
                   <CardContent className="grid gap-3 overflow-hidden py-4 text-sm">
                     {Object.entries(previewPayload.payload).map(
                       ([key, value]) => (
                         <div
                           key={key}
-                          className="flex flex-col gap-1 text-zinc-600 dark:text-zinc-300 sm:flex-row sm:items-start sm:justify-between"
+                          className="flex flex-col gap-1.5 rounded-lg bg-white/60 dark:bg-zinc-800/60 p-2.5 text-zinc-700 dark:text-zinc-300 sm:flex-row sm:items-start sm:justify-between"
                         >
-                          <span className="shrink-0 uppercase tracking-wide text-xs text-zinc-500">
-                            {key}
+                          <span className="shrink-0 uppercase tracking-wider text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                            {key.replace(/_/g, " ")}
                           </span>
-                          <span className="min-w-0 flex-1 break-all font-medium sm:text-right">
+                          <span className="min-w-0 flex-1 break-all font-mono text-xs font-medium sm:text-right">
                             {String(value)}
                           </span>
                         </div>
@@ -603,29 +785,29 @@ export default function HomePage() {
               </section>
             </form>
           </CardContent>
-          <CardFooter className="sticky bottom-0 left-0 right-0 flex flex-col gap-3 bg-white/90 py-4 backdrop-blur dark:bg-zinc-950/90 sm:flex-row">
+          <CardFooter className="sticky bottom-0 left-0 right-0 flex flex-col gap-3 border-t border-zinc-200 bg-white/95 py-5 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95 sm:flex-row">
             <Button
               type="submit"
               form="simulation-form"
-              className="h-12 w-full gap-2 text-base"
+              className="h-12 w-full gap-2 text-base font-semibold shadow-md transition-all hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Running
+                  Running...
                 </>
               ) : (
                 <>
                   <Play className="h-5 w-5" />
-                  Run simulation
+                  Run Simulation
                 </>
               )}
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="h-12 w-full gap-2 text-base"
+              className="h-12 w-full gap-2 text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
               onClick={isSubmitting ? handleCancel : () => form.reset()}
             >
               {isSubmitting ? (
@@ -636,45 +818,54 @@ export default function HomePage() {
               ) : (
                 <>
                   <RefreshCcw className="h-5 w-5" />
-                  Reset form
+                  Reset Form
                 </>
               )}
             </Button>
           </CardFooter>
         </Card>
 
-        <div className="order-1 flex flex-col gap-6 xl:order-2">
-          {networkError && <Alert variant="destructive">{networkError}</Alert>}
+        <div className="order-1 flex flex-col gap-8 xl:order-2">
+          {networkError && (
+            <Alert variant="destructive" className="border-2 border-red-300 dark:border-red-900/50 shadow-lg">
+              <span className="font-semibold">{networkError}</span>
+            </Alert>
+          )}
 
           {renderResults()}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent simulations</CardTitle>
-              <CardDescription>
+          <Card className="shadow-lg">
+            <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
+              <CardTitle className="text-xl font-bold">Recent Simulations</CardTitle>
+              <CardDescription className="mt-1">
                 Load one of the last five requests.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               {history.length === 0 ? (
-                <p className="text-sm text-zinc-500">No history yet.</p>
+                <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-8 text-center dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900">
+                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">No history yet.</p>
+                  <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Run your first simulation to see it here</p>
+                </div>
               ) : (
-                <div className="space-y-3 text-sm">
+                <div className="space-y-3">
                   {history.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleHistoryLoad(item)}
-                      className="flex w-full flex-col rounded-lg border border-zinc-200 p-3 text-left transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+                      className="group flex w-full flex-col rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-white to-zinc-50 p-4 text-left transition-all hover:border-blue-400 hover:shadow-md dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-900/50 dark:hover:border-blue-600"
                     >
-                      <span className="text-xs uppercase text-zinc-500">
-                        {item.summary.modeLabel}
-                      </span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="rounded-md bg-blue-100 px-2 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                          {item.summary.modeLabel}
+                        </span>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {new Date(item.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <span className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {item.summary.matches}/{item.summary.sequenceCount}{" "}
                         matches
-                      </span>
-                      <span className="text-xs text-zinc-500">
-                        {new Date(item.timestamp).toLocaleString()}
                       </span>
                     </button>
                   ))}
@@ -683,43 +874,43 @@ export default function HomePage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Guided walkthrough</CardTitle>
-              <CardDescription>
+          <Card className="shadow-lg">
+            <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
+              <CardTitle className="text-xl font-bold">Guided Walkthrough</CardTitle>
+              <CardDescription className="mt-1">
                 Compare request/response details across form and results.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <Tabs defaultValue="request">
-                <TabsList>
-                  <TabsTrigger value="request">Request schema</TabsTrigger>
-                  <TabsTrigger value="response">Response notes</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="request" className="font-semibold">Request Schema</TabsTrigger>
+                  <TabsTrigger value="response" className="font-semibold">Response Notes</TabsTrigger>
                 </TabsList>
-                <TabsContent value="request">
-                  <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-                    <p>
+                <TabsContent value="request" className="space-y-4">
+                  <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-5 text-sm text-zinc-700 dark:from-blue-950/30 dark:to-indigo-950/30 dark:text-zinc-300 border border-blue-100 dark:border-blue-900/50">
+                    <p className="leading-relaxed mb-3">
                       Every run hits{" "}
-                      <code className="font-mono">/simulate</code> with the
-                      parameters listed in the preview card. At least one of
-                      <code className="font-mono"> sequences</code> or
-                      <code className="font-mono"> input_path</code> is
+                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-2 py-1 font-mono text-xs font-semibold text-blue-700 dark:text-blue-300">/simulate</code> with the
+                      parameters listed in the preview card. At least one of{" "}
+                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-2 py-1 font-mono text-xs font-semibold text-blue-700 dark:text-blue-300">sequences</code> or
+                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-2 py-1 font-mono text-xs font-semibold text-blue-700 dark:text-blue-300"> input_path</code> is
                       required.
                     </p>
-                    <p>
+                    <p className="leading-relaxed">
                       Requests automatically normalize casing (DNA) and enforce
                       mismatch & dot-bracket switches based on the active mode.
                     </p>
                   </div>
                 </TabsContent>
-                <TabsContent value="response">
-                  <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-                    <p>
+                <TabsContent value="response" className="space-y-4">
+                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-green-50 p-5 text-sm text-zinc-700 dark:from-emerald-950/30 dark:to-green-950/30 dark:text-zinc-300 border border-emerald-100 dark:border-emerald-900/50">
+                    <p className="leading-relaxed mb-3">
                       The response summary surfaces match counts, runtime, and
                       stack depth. Sequence table lists acceptance status,
                       mismatch chips, and notes.
                     </p>
-                    <p>
+                    <p className="leading-relaxed">
                       Trace entries populate the timeline; once backend returns
                       transition graphs, they will animate in the reserved
                       canvas.

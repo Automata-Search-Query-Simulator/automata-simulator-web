@@ -1,4 +1,13 @@
-import { NormalizedResult, NormalizedSequence, TraceItem, FormValues } from "./types";
+import {
+  NormalizedResult,
+  NormalizedSequence,
+  TraceItem,
+  FormValues,
+  ApiResponse,
+  Automaton,
+  SequenceResult,
+  MatchRange,
+} from "./types";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -34,6 +43,18 @@ export const buildPreviewPayload = (values: FormValues) => {
   return { payload, sequences };
 };
 
+const parseSequenceText = (text: string): string => {
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return typeof parsed[0] === "string" ? parsed[0] : text;
+    }
+    return text;
+  } catch {
+    return text;
+  }
+};
+
 export const normalizeResponse = (
   rawData: unknown,
   modeLabel: string,
@@ -42,6 +63,70 @@ export const normalizeResponse = (
   runtimeMs?: number,
 ): NormalizedResult => {
   const data = isRecord(rawData) ? rawData : {};
+
+  // Check if this is the new API response format
+  const isNewFormat =
+    isRecord(data["automaton"]) &&
+    Array.isArray(data["sequences"]) &&
+    typeof data["all_accepted"] === "boolean";
+
+  if (isNewFormat) {
+    const apiResponse = data as unknown as ApiResponse;
+    const automaton = apiResponse.automaton;
+
+    const sequences: NormalizedSequence[] = apiResponse.sequences.map(
+      (seqResult: SequenceResult, idx: number) => {
+        const sequenceText = parseSequenceText(seqResult.sequence_text);
+        const sequence =
+          sequenceText || contextSequences[idx] || `Sequence ${idx + 1}`;
+
+        return {
+          id: `${seqResult.sequence_number}`,
+          sequence,
+          accepted: seqResult.has_matches,
+          matchRanges: seqResult.match_ranges,
+          coverage: seqResult.coverage,
+          statesVisited: seqResult.states_visited,
+          stackDepth:
+            seqResult.max_stack_depth !== null
+              ? seqResult.max_stack_depth
+              : undefined,
+          notes: seqResult.has_matches
+            ? `${seqResult.match_count} match(es) found`
+            : "No matches",
+        };
+      }
+    );
+
+    const traces: TraceItem[] = [];
+
+    const summary: NormalizedResult["summary"] = {
+      modeLabel,
+      runtimeMs,
+      sequenceCount: apiResponse.total_sequences,
+      matches: apiResponse.matches,
+      mismatchBudget,
+      maxStackDepth: sequences
+        .map((seq) => seq.stackDepth)
+        .filter((value): value is number => typeof value === "number")
+        .reduce((max, depth) => Math.max(max, depth), 0) || undefined,
+      timestamp: new Date().toISOString(),
+      averageCoverage: apiResponse.average_coverage,
+      totalStatesVisited: apiResponse.total_states_visited,
+      allAccepted: apiResponse.all_accepted,
+      sequencesWithMatches: apiResponse.sequences_with_matches,
+    };
+
+    return {
+      summary,
+      sequences,
+      traces,
+      automaton,
+      raw: rawData,
+    };
+  }
+
+  // Fallback to old format handling
   const sequencesSource =
     (Array.isArray(data["sequences"]) ? data["sequences"] : undefined) ??
     (Array.isArray(data["results"]) ? data["results"] : undefined) ??
