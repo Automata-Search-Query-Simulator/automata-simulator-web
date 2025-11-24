@@ -6,7 +6,7 @@ export const formSchema = z
     mode: z.enum(MODE_VALUES),
     sequences: z.string().optional(),
     inputPath: z.string().optional(),
-    pattern: z.string().min(1, "Pattern required"),
+    pattern: z.string().optional(),
     mismatchBudget: z.number().min(0).max(5),
     allowDotBracket: z.boolean(),
   })
@@ -21,6 +21,15 @@ export const formSchema = z
         code: z.ZodIssueCode.custom,
         path: ["inputPath"],
         message: "Provide at least one sequence or a file path.",
+      });
+    }
+
+    // Pattern is required unless allowDotBracket is true
+    if (!data.allowDotBracket && (!data.pattern || !data.pattern.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["pattern"],
+        message: "Pattern required",
       });
     }
 

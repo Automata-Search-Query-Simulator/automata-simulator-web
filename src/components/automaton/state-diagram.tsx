@@ -65,7 +65,8 @@ export function StateDiagram({
         const state = automaton.states.find((s) => s.id === current);
 
         if (state) {
-          for (const edge of state.edges) {
+          const edges = Array.isArray(state.edges) ? state.edges : [];
+          for (const edge of edges) {
             if (!visited.has(edge.to)) {
               visited.add(edge.to);
               levels.set(edge.to, currentLevel + 1);
@@ -106,6 +107,9 @@ export function StateDiagram({
         });
       });
 
+      // Check if this is a PDA automaton
+      const isPDA = automaton.kind === "PDA" || automaton.kind === "pda";
+
       // Create circular nodes
       automaton.states.forEach((state) => {
         const pos = nodePositions.get(state.id);
@@ -114,6 +118,7 @@ export function StateDiagram({
         const isStart = state.id === automaton.start;
         const isAccept = state.id === automaton.accept || state.accept;
         const isActive = currentActive.includes(state.id);
+        const stackDepth = state.stackDepth;
 
         flowNodes.push({
           id: `node-${state.id}`,
@@ -133,6 +138,11 @@ export function StateDiagram({
                 {isAccept && (
                   <span className="text-[10px] text-green-600 dark:text-green-400 leading-tight">
                     Accept
+                  </span>
+                )}
+                {isPDA && stackDepth !== undefined && (
+                  <span className="text-[9px] leading-tight font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/80 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700">
+                    Stack: {stackDepth}
                   </span>
                 )}
               </div>
@@ -169,7 +179,8 @@ export function StateDiagram({
       const edgeGroups = new Map<string, Array<{ state: AutomatonState; edge: AutomatonEdge; edgeIndex: number }>>();
       
       automaton.states.forEach((state) => {
-        state.edges.forEach((edge, edgeIndex) => {
+        const edges = Array.isArray(state.edges) ? state.edges : [];
+        edges.forEach((edge, edgeIndex) => {
           const edgeKey = `${state.id}-${edge.to}`;
           if (!edgeGroups.has(edgeKey)) {
             edgeGroups.set(edgeKey, []);
@@ -186,7 +197,21 @@ export function StateDiagram({
           if (!sourcePos || !targetPos) return;
 
           const isEpsilon = edge.type === "epsilon";
-          const label = isEpsilon ? "ε" : edge.literal || "";
+          const isPDA = automaton.kind === "PDA" || automaton.kind === "pda";
+          
+          // Build label with PDA operation if available
+          let label = "";
+          if (isPDA && edge.operation) {
+            const symbol = edge.symbol || edge.literal || "";
+            const operationIcon = 
+              edge.operation === "push" ? "⬆" :
+              edge.operation === "pop" ? "⬇" :
+              edge.operation === "ignore" ? "⊘" : "";
+            label = symbol ? `${symbol} ${operationIcon}` : operationIcon;
+          } else {
+            label = isEpsilon ? "ε" : edge.literal || "";
+          }
+          
           const sourceIsActive = currentActive.includes(state.id);
           const isSelfLoop = state.id === edge.to;
           const sourceLevel = levels.get(state.id) ?? 0;
@@ -216,20 +241,44 @@ export function StateDiagram({
             type: edgeType,
             animated: sourceIsActive,
             style: {
-              stroke: isEpsilon ? "#9ca3af" : "#3b82f6",
+              stroke: isEpsilon 
+                ? "#9ca3af" 
+                : isPDA && edge.operation === "pop"
+                ? "#ef4444" // Red for pop
+                : isPDA && edge.operation === "push"
+                ? "#10b981" // Green for push
+                : isPDA && edge.operation === "ignore"
+                ? "#6b7280" // Gray for ignore
+                : "#3b82f6", // Blue for regular transitions
               strokeWidth: 2,
               strokeDasharray: isEpsilon ? "5,5" : undefined,
             },
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              color: isEpsilon ? "#9ca3af" : "#3b82f6",
+              color: isEpsilon 
+                ? "#9ca3af" 
+                : isPDA && edge.operation === "pop"
+                ? "#ef4444"
+                : isPDA && edge.operation === "push"
+                ? "#10b981"
+                : isPDA && edge.operation === "ignore"
+                ? "#6b7280"
+                : "#3b82f6",
               width: 20,
               height: 20,
             },
             labelStyle: {
-              fill: isEpsilon ? "#6b7280" : "#1e40af",
+              fill: isEpsilon 
+                ? "#6b7280" 
+                : isPDA && edge.operation === "pop"
+                ? "#dc2626"
+                : isPDA && edge.operation === "push"
+                ? "#059669"
+                : isPDA && edge.operation === "ignore"
+                ? "#4b5563"
+                : "#1e40af",
               fontWeight: 600,
-              fontSize: 13,
+              fontSize: isPDA ? 12 : 13,
             },
             labelBgStyle: {
               fill: "white",
@@ -305,9 +354,43 @@ export function StateDiagram({
     );
   }
 
+  const isPDA = automaton?.kind === "PDA" || automaton?.kind === "pda";
+  const pdaRules = automaton?.rules;
+
   return (
     <ReactFlowProvider>
       <div className="space-y-4">
+        {isPDA && pdaRules && pdaRules.length > 0 && (
+          <div className="rounded-lg border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 p-4 dark:border-purple-900/50 dark:from-purple-950/30 dark:to-indigo-950/30">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-bold text-purple-900 dark:text-purple-100">
+                PDA Rules:
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {pdaRules.map((rule, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-purple-800 dark:text-purple-200 border-2 border-purple-300 dark:border-purple-600 shadow-sm"
+                >
+                  <span className="text-purple-700 dark:text-purple-300 font-bold">
+                    Expected:
+                  </span>
+                  <code className="font-mono text-sm font-bold text-purple-900 dark:text-purple-100">{rule.expected}</code>
+                </span>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-3 text-xs">
+              <div className="flex items-center gap-1.5 bg-white/60 dark:bg-zinc-800/60 px-2 py-1 rounded border border-purple-200 dark:border-purple-700">
+                <span className="text-green-700 dark:text-green-300 font-bold">⬆ Push</span>
+                <span className="text-zinc-400 dark:text-zinc-500">|</span>
+                <span className="text-red-700 dark:text-red-300 font-bold">⬇ Pop</span>
+                <span className="text-zinc-400 dark:text-zinc-500">|</span>
+                <span className="text-zinc-700 dark:text-zinc-300 font-bold">⊘ Ignore</span>
+              </div>
+            </div>
+          </div>
+        )}
         {statePath.length > 0 && (
           <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center gap-2">

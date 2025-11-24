@@ -7,12 +7,18 @@ export type AutomatonEdge = {
   type: "literal" | "epsilon";
   to: number;
   literal?: string;
+  // PDA-specific fields
+  operation?: "push" | "pop" | "ignore";
+  symbol?: string;
+  code?: number;
 };
 
 export type AutomatonState = {
   id: number;
   accept: boolean;
   edges: AutomatonEdge[];
+  // PDA-specific fields
+  stackDepth?: number;
 };
 
 export type Automaton = {
@@ -20,6 +26,8 @@ export type Automaton = {
   start: number;
   accept: number;
   states: AutomatonState[];
+  // PDA-specific fields
+  rules?: Array<{ expected: string }>;
 };
 
 export type MatchRange = {

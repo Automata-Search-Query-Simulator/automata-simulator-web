@@ -27,17 +27,21 @@ export const buildPreviewPayload = (values: FormValues) => {
   const sequences = getSequenceArray(values.sequences);
   const payload: Record<string, unknown> = {
     mode: values.mode,
-    pattern: values.pattern.trim(),
     mismatch_budget: values.mode === "efa" ? values.mismatchBudget : 0,
     allow_dot_bracket: values.mode === "pda" ? values.allowDotBracket : false,
   };
+
+  // Only include pattern if it's provided or if allowDotBracket is false
+  if (values.pattern?.trim()) {
+    payload.pattern = values.pattern.trim();
+  }
 
   if (values.inputPath?.trim()) {
     payload.input_path = values.inputPath.trim();
   }
 
   if (sequences.length) {
-    payload.sequences = JSON.stringify(sequences);
+    payload.sequences = sequences;
   }
 
   return { payload, sequences };
@@ -60,7 +64,7 @@ export const normalizeResponse = (
   modeLabel: string,
   contextSequences: string[],
   mismatchBudget: number,
-  runtimeMs?: number,
+  runtimeMs?: number
 ): NormalizedResult => {
   const data = isRecord(rawData) ? rawData : {};
 
@@ -72,7 +76,95 @@ export const normalizeResponse = (
 
   if (isNewFormat) {
     const apiResponse = data as unknown as ApiResponse;
-    const automaton = apiResponse.automaton;
+    const rawAutomaton = apiResponse.automaton;
+
+    // Normalize automaton structure to ensure all states have edges arrays
+    const automaton: Automaton = {
+      ...rawAutomaton,
+      // Preserve PDA-specific rules if present
+      rules: Array.isArray(rawAutomaton.rules) ? rawAutomaton.rules : undefined,
+      states: Array.isArray(rawAutomaton.states)
+        ? rawAutomaton.states.map((state) => {
+            // Handle different possible edge property names
+            const rawEdges =
+              state.edges ??
+              (state as Record<string, unknown>).transitions ??
+              (state as Record<string, unknown>).outgoing ??
+              [];
+
+            return {
+              ...state,
+              // Preserve PDA-specific stackDepth if present
+              stackDepth:
+                typeof (state as Record<string, unknown>).stackDepth ===
+                "number"
+                  ? ((state as Record<string, unknown>).stackDepth as number)
+                  : undefined,
+              edges: Array.isArray(rawEdges)
+                ? rawEdges.map((edge: unknown) => {
+                    // Handle edge as object or different formats
+                    if (isRecord(edge)) {
+                      const isEpsilon =
+                        edge.type === "epsilon" ||
+                        edge.transition_type === "epsilon" ||
+                        edge.label === "ε" ||
+                        edge.label === "epsilon" ||
+                        (edge.symbol === "ε" &&
+                          edge.operation !== "push" &&
+                          edge.operation !== "pop") ||
+                        (edge.symbol === "epsilon" &&
+                          edge.operation !== "push" &&
+                          edge.operation !== "pop");
+
+                      // Preserve PDA-specific operation and symbol
+                      const operation =
+                        typeof edge.operation === "string"
+                          ? (edge.operation as "push" | "pop" | "ignore")
+                          : undefined;
+                      const symbol =
+                        typeof edge.symbol === "string"
+                          ? edge.symbol
+                          : undefined;
+                      const code =
+                        typeof edge.code === "number" ? edge.code : undefined;
+
+                      return {
+                        type: isEpsilon ? "epsilon" : "literal",
+                        to:
+                          typeof edge.to === "number"
+                            ? edge.to
+                            : typeof edge.target === "number"
+                            ? edge.target
+                            : typeof edge.dest === "number"
+                            ? edge.dest
+                            : Number(edge.to ?? edge.target ?? edge.dest ?? 0),
+                        literal: isEpsilon
+                          ? undefined
+                          : String(
+                              edge.literal ?? edge.label ?? edge.symbol ?? ""
+                            ),
+                        // Include PDA-specific fields
+                        operation,
+                        symbol,
+                        code,
+                      };
+                    }
+                    // Fallback for unexpected edge format
+                    return {
+                      type: "literal" as const,
+                      to: 0,
+                      literal: undefined,
+                    };
+                  })
+                : [],
+              accept:
+                typeof state.accept === "boolean"
+                  ? state.accept
+                  : state.id === rawAutomaton.accept,
+            };
+          })
+        : [],
+    };
 
     const sequences: NormalizedSequence[] = apiResponse.sequences.map(
       (seqResult: SequenceResult, idx: number) => {
@@ -106,10 +198,11 @@ export const normalizeResponse = (
       sequenceCount: apiResponse.total_sequences,
       matches: apiResponse.matches,
       mismatchBudget,
-      maxStackDepth: sequences
-        .map((seq) => seq.stackDepth)
-        .filter((value): value is number => typeof value === "number")
-        .reduce((max, depth) => Math.max(max, depth), 0) || undefined,
+      maxStackDepth:
+        sequences
+          .map((seq) => seq.stackDepth)
+          .filter((value): value is number => typeof value === "number")
+          .reduce((max, depth) => Math.max(max, depth), 0) || undefined,
       timestamp: new Date().toISOString(),
       averageCoverage: apiResponse.average_coverage,
       totalStatesVisited: apiResponse.total_states_visited,
@@ -140,7 +233,7 @@ export const normalizeResponse = (
         if (isRecord(item)) {
           const acceptedValue = item["accepted"];
           const fallbackAccepted =
-            item["is_match"] ?? (item["status"] === "accept");
+            item["is_match"] ?? item["status"] === "accept";
           return {
             id: typeof item["id"] === "string" ? item["id"] : `${idx + 1}`,
             sequence:
@@ -151,31 +244,31 @@ export const normalizeResponse = (
               typeof acceptedValue === "boolean"
                 ? acceptedValue
                 : typeof fallbackAccepted === "boolean"
-                  ? fallbackAccepted
-                  : undefined,
+                ? fallbackAccepted
+                : undefined,
             mismatches:
               typeof item["mismatches"] === "number"
                 ? item["mismatches"]
                 : typeof item["mismatch_count"] === "number"
-                  ? item["mismatch_count"]
-                  : undefined,
+                ? item["mismatch_count"]
+                : undefined,
             mismatchPositions: Array.isArray(item["mismatch_positions"])
               ? (item["mismatch_positions"] as number[])
               : Array.isArray(item["differences"])
-                ? (item["differences"] as number[])
-                : undefined,
+              ? (item["differences"] as number[])
+              : undefined,
             stackDepth:
               typeof item["max_stack_depth"] === "number"
                 ? item["max_stack_depth"]
                 : typeof item["stackDepth"] === "number"
-                  ? item["stackDepth"]
-                  : undefined,
+                ? item["stackDepth"]
+                : undefined,
             notes:
               typeof item["note"] === "string"
                 ? item["note"]
                 : typeof item["explanation"] === "string"
-                  ? item["explanation"]
-                  : undefined,
+                ? item["explanation"]
+                : undefined,
           };
         }
         return {
@@ -201,10 +294,10 @@ export const normalizeResponse = (
         typeof item["description"] === "string"
           ? item["description"]
           : typeof item["action"] === "string"
-            ? item["action"]
-            : typeof item["label"] === "string"
-              ? item["label"]
-              : `Executed step ${idx + 1}`;
+          ? item["action"]
+          : typeof item["label"] === "string"
+          ? item["label"]
+          : `Executed step ${idx + 1}`;
       const stepValue =
         typeof item["step"] === "number" ? item["step"] : idx + 1;
       return { step: stepValue, label: description };
@@ -230,7 +323,9 @@ export const normalizeResponse = (
     mismatchBudget,
     maxStackDepth:
       statsStackDepth ??
-      (stackDepthCandidates.length ? Math.max(...stackDepthCandidates) : undefined),
+      (stackDepthCandidates.length
+        ? Math.max(...stackDepthCandidates)
+        : undefined),
     timestamp: new Date().toISOString(),
   };
 
