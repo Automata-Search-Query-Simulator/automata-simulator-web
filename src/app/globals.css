@@ -24,3 +24,27 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  /* Improve touch targets */
+  button, a, input, textarea, select {
+    min-height: 44px;
+  }
+  
+  /* Better scrolling on mobile */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent text size adjustment on iOS */
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
+
+/* Utility class for touch-friendly interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}

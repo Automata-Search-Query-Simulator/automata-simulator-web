@@ -161,55 +161,119 @@ export default function HomePage() {
   };
 
   const deriveStatePath = useMemo(() => {
-    if (!result?.automaton) return [];
-    const automaton = result.automaton;
-    const path: number[] = [automaton.start];
-    // Try to find a path to accept state
-    const visited = new Set<number>([automaton.start]);
-    const queue: number[] = [automaton.start];
+    if (
+      !result?.automaton ||
+      !result?.sequences ||
+      result.sequences.length === 0
+    ) {
+      return [];
+    }
 
-    while (queue.length > 0 && path.length < 20) {
-      const current = queue.shift()!;
-      const state = automaton.states.find((s) => s.id === current);
+    const automaton = result.automaton;
+    const sequence = result.sequences[0];
+    const sequenceText = sequence.sequence;
+
+    if (!sequenceText || sequenceText.length === 0) {
+      return [];
+    }
+
+    const path: number[] = [automaton.start];
+    let currentStateId = automaton.start;
+
+    // Simulate the automaton execution with the actual sequence
+    for (let i = 0; i < sequenceText.length && path.length < 50; i++) {
+      const char = sequenceText[i].toUpperCase(); // Normalize to uppercase for DNA sequences
+      const state = automaton.states.find((s) => s.id === currentStateId);
+
       if (!state) break;
 
-      if (state.id === automaton.accept || state.accept) {
-        path.push(state.id);
+      // Check if we've reached an accept state
+      if (state.accept || state.id === automaton.accept) {
         break;
       }
 
       const edges = Array.isArray(state.edges) ? state.edges : [];
+      let nextStateId: number | null = null;
+
+      // Try to find a matching transition
+      // First priority: exact match (case-insensitive)
       for (const edge of edges) {
-        if (!visited.has(edge.to)) {
-          visited.add(edge.to);
-          queue.push(edge.to);
-          path.push(edge.to);
+        if (edge.type === "epsilon") continue;
+
+        const edgeSymbol = (edge.literal || edge.symbol || "").toUpperCase();
+
+        // Exact match
+        if (edgeSymbol === char) {
+          nextStateId = edge.to;
           break;
         }
       }
+
+      // Second priority: wildcard match
+      if (nextStateId === null) {
+        for (const edge of edges) {
+          if (edge.type === "epsilon") continue;
+
+          const edgeSymbol = (edge.literal || edge.symbol || "").toUpperCase();
+
+          // Wildcard matches any character
+          if (edgeSymbol === "*" || edgeSymbol === "") {
+            nextStateId = edge.to;
+            break;
+          }
+        }
+      }
+
+      // Third priority: any non-epsilon transition (fallback)
+      if (nextStateId === null) {
+        for (const edge of edges) {
+          if (edge.type !== "epsilon") {
+            nextStateId = edge.to;
+            break;
+          }
+        }
+      }
+
+      if (nextStateId !== null) {
+        path.push(nextStateId);
+        currentStateId = nextStateId;
+      } else {
+        // No valid transition found
+        break;
+      }
+    }
+
+    // Add accept state if we reached it
+    const finalState = automaton.states.find((s) => s.id === currentStateId);
+    if (
+      finalState &&
+      (finalState.accept || currentStateId === automaton.accept) &&
+      !path.includes(currentStateId)
+    ) {
+      path.push(currentStateId);
     }
 
     return path;
-  }, [result?.automaton]);
+  }, [result?.automaton, result?.sequences]);
 
   const renderResults = () => {
     if (isSubmitting) {
       return (
         <Card className="shadow-lg border-2 border-blue-200 dark:border-blue-900/50">
-          <CardHeader className="border-b border-zinc-100 dark:border-zinc-800">
-            <div className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-              <div>
-                <CardTitle className="text-xl font-bold">
+          <CardHeader className="border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-blue-600 dark:text-blue-400 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-lg sm:text-xl font-bold">
                   Running Simulation…
                 </CardTitle>
-                <CardDescription className="mt-1">
+                <CardDescription className="mt-1 text-xs sm:text-sm">
                   Fetching automaton trace from backend
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4 pt-6">
+          <CardContent className="flex flex-col gap-3 sm:gap-4 pt-4 sm:pt-6 px-4 sm:px-6">
             <Skeleton className="h-24 w-full rounded-lg" />
             <Skeleton className="h-48 w-full rounded-lg" />
             <Skeleton className="h-64 w-full rounded-lg" />
@@ -221,14 +285,14 @@ export default function HomePage() {
     if (!result) {
       return (
         <Card className="shadow-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700">
-          <CardHeader className="text-center py-12">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30">
-              <Play className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+          <CardHeader className="text-center py-8 sm:py-12 px-4 sm:px-6">
+            <div className="mx-auto mb-3 sm:mb-4 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30">
+              <Play className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <CardTitle className="text-xl font-bold mb-2">
+            <CardTitle className="text-lg sm:text-xl font-bold mb-2">
               No Simulation Yet
             </CardTitle>
-            <CardDescription className="text-base max-w-md mx-auto">
+            <CardDescription className="text-sm sm:text-base max-w-md mx-auto">
               Choose a mode, add sequences or a file path, then run the
               automaton to see traces and summaries.
             </CardDescription>
@@ -240,65 +304,65 @@ export default function HomePage() {
     return (
       <div className="space-y-8">
         <Card className="shadow-lg border-2 border-green-200 dark:border-green-900/50 overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-b-2 border-green-200 dark:border-green-900/50">
-            <div className="flex flex-wrap items-start justify-between gap-6">
-              <div className="space-y-1">
+          <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-b-2 border-green-200 dark:border-green-900/50 px-4 sm:px-6">
+            <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-6">
+              <div className="space-y-1 flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
-                  <CardTitle className="text-xl font-bold">
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
+                  <CardTitle className="text-lg sm:text-xl font-bold truncate">
                     {result.summary.modeLabel}
                   </CardTitle>
                 </div>
-                <CardDescription className="text-sm">
+                <CardDescription className="text-xs sm:text-sm">
                   Completed at{" "}
                   <span className="font-medium">
                     {new Date(result.summary.timestamp).toLocaleTimeString()}
                   </span>
                 </CardDescription>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
-                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
-                  <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:gap-4 text-xs sm:text-sm lg:grid-cols-3 xl:grid-cols-5">
+                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-2 sm:p-3 border border-green-100 dark:border-green-900/50">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
                     Runtime
                   </p>
-                  <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm sm:text-base lg:text-lg font-bold text-zinc-900 dark:text-zinc-100 break-words">
                     {result.summary.runtimeMs
                       ? `${result.summary.runtimeMs} ms`
                       : "—"}
                   </p>
                 </div>
-                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
-                  <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-2 sm:p-3 border border-green-100 dark:border-green-900/50">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
                     Matches
                   </p>
-                  <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                  <p className="text-sm sm:text-base lg:text-lg font-bold text-emerald-600 dark:text-emerald-400 break-words">
                     {result.summary.matches}/{result.summary.sequenceCount}
                   </p>
                 </div>
-                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
-                  <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-2 sm:p-3 border border-green-100 dark:border-green-900/50">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
                     Mismatch Budget
                   </p>
-                  <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm sm:text-base lg:text-lg font-bold text-zinc-900 dark:text-zinc-100">
                     {result.summary.mismatchBudget}
                   </p>
                 </div>
                 {result.summary.averageCoverage !== undefined && (
-                  <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
-                    <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                  <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-2 sm:p-3 border border-green-100 dark:border-green-900/50">
+                    <p className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
                       Avg Coverage
                     </p>
-                    <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                    <p className="text-sm sm:text-base lg:text-lg font-bold text-blue-600 dark:text-blue-400">
                       {(result.summary.averageCoverage * 100).toFixed(1)}%
                     </p>
                   </div>
                 )}
                 {result.summary.totalStatesVisited !== undefined && (
-                  <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-3 border border-green-100 dark:border-green-900/50">
-                    <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
+                  <div className="rounded-lg bg-white/60 dark:bg-zinc-900/60 p-2 sm:p-3 border border-green-100 dark:border-green-900/50">
+                    <p className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 font-semibold">
                       States Visited
                     </p>
-                    <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                    <p className="text-sm sm:text-base lg:text-lg font-bold text-purple-600 dark:text-purple-400">
                       {result.summary.totalStatesVisited}
                     </p>
                   </div>
@@ -306,29 +370,29 @@ export default function HomePage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 pt-6">
-            <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+          <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 pt-4 sm:pt-6 px-4 sm:px-6">
+            <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-4 sm:p-5 text-xs sm:text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
               <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
                 Max Stack Depth
               </p>
-              <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+              <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
                 {result.summary.maxStackDepth ?? "—"}
               </p>
             </div>
-            <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+            <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-4 sm:p-5 text-xs sm:text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
               <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
                 Sequence Count
               </p>
-              <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+              <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
                 {result.summary.sequenceCount}
               </p>
             </div>
             {result.summary.allAccepted !== undefined && (
-              <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+              <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-4 sm:p-5 text-xs sm:text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
                 <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
                   All Accepted
                 </p>
-                <p className="text-3xl font-bold">
+                <p className="text-2xl sm:text-3xl font-bold">
                   {result.summary.allAccepted ? (
                     <span className="text-emerald-600 dark:text-emerald-400">
                       Yes
@@ -340,11 +404,11 @@ export default function HomePage() {
               </div>
             )}
             {result.summary.sequencesWithMatches !== undefined && (
-              <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-5 text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
+              <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-4 sm:p-5 text-xs sm:text-sm dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-400 dark:hover:border-blue-600">
                 <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2 font-semibold">
                   With Matches
                 </p>
-                <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+                <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
                   {result.summary.sequencesWithMatches}/
                   {result.summary.sequenceCount}
                 </p>
@@ -354,38 +418,38 @@ export default function HomePage() {
         </Card>
 
         <Card className="shadow-lg">
-          <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
-            <CardTitle className="text-xl font-bold">
+          <CardHeader className="border-b border-zinc-200 dark:border-zinc-800 px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl font-bold">
               Sequence Outcomes
             </CardTitle>
-            <CardDescription className="mt-1">
+            <CardDescription className="mt-1 text-xs sm:text-sm">
               Accepted states, mismatches, and stack summaries per sequence.
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-sm">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <table className="w-full min-w-[600px] sm:min-w-[800px] text-xs sm:text-sm">
                 <thead className="bg-gradient-to-r from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:to-zinc-800 border-b-2 border-zinc-200 dark:border-zinc-700">
                   <tr className="text-left">
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       Sequence
                     </th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       Accepted
                     </th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       Matches
                     </th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       Coverage
                     </th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       States Visited
                     </th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       Stack Depth
                     </th>
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       Notes
                     </th>
                   </tr>
@@ -396,8 +460,8 @@ export default function HomePage() {
                       key={seq.id}
                       className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
                     >
-                      <td className="px-4 py-4 font-mono text-xs text-zinc-900 dark:text-zinc-100">
-                        <div className="max-w-xs truncate font-medium">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4 font-mono text-[10px] sm:text-xs text-zinc-900 dark:text-zinc-100">
+                        <div className="max-w-[120px] sm:max-w-xs truncate font-medium">
                           {seq.sequence}
                         </div>
                         {seq.matchRanges && seq.matchRanges.length > 0 && (
@@ -413,25 +477,28 @@ export default function HomePage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4">
                         {seq.accepted === undefined ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-zinc-400"></span>
-                            pending
+                          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-zinc-400"></span>
+                            <span className="hidden sm:inline">pending</span>
+                            <span className="sm:hidden">P</span>
                           </span>
                         ) : seq.accepted ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 shadow-sm dark:from-emerald-900/50 dark:to-green-900/50 dark:text-emerald-200">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                            accepted
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-emerald-700 shadow-sm dark:from-emerald-900/50 dark:to-green-900/50 dark:text-emerald-200">
+                            <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-emerald-500"></span>
+                            <span className="hidden sm:inline">accepted</span>
+                            <span className="sm:hidden">A</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-red-100 to-rose-100 px-2.5 py-1 text-xs font-semibold text-red-700 shadow-sm dark:from-red-900/50 dark:to-rose-900/50 dark:text-red-200">
-                            <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-                            rejected
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-red-100 to-rose-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-red-700 shadow-sm dark:from-red-900/50 dark:to-rose-900/50 dark:text-red-200">
+                            <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-red-500"></span>
+                            <span className="hidden sm:inline">rejected</span>
+                            <span className="sm:hidden">R</span>
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4">
                         {seq.matchRanges ? (
                           <span className="font-bold text-blue-600 dark:text-blue-400">
                             {seq.matchRanges.length}
@@ -451,32 +518,32 @@ export default function HomePage() {
                           <span className="text-zinc-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4">
                         {seq.coverage !== undefined ? (
-                          <span className="font-bold text-purple-600 dark:text-purple-400">
+                          <span className="font-bold text-purple-600 dark:text-purple-400 text-[10px] sm:text-xs">
                             {(seq.coverage * 100).toFixed(1)}%
                           </span>
                         ) : (
                           <span className="text-zinc-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4">
                         {seq.statesVisited !== undefined ? (
-                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs">
                             {seq.statesVisited}
                           </span>
                         ) : (
                           <span className="text-zinc-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-4">
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4">
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-[10px] sm:text-xs">
                           {seq.stackDepth ?? (
                             <span className="text-zinc-400">—</span>
                           )}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-zinc-600 dark:text-zinc-400 text-xs">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4 text-zinc-600 dark:text-zinc-400 text-[10px] sm:text-xs max-w-[100px] sm:max-w-none truncate">
                         {seq.notes ?? <span className="text-zinc-400">—</span>}
                       </td>
                     </tr>
@@ -488,16 +555,18 @@ export default function HomePage() {
         </Card>
 
         <Card className="shadow-lg">
-          <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
-            <CardTitle className="text-xl font-bold">State Diagram</CardTitle>
-            <CardDescription className="mt-1">
+          <CardHeader className="border-b border-zinc-200 dark:border-zinc-800 px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl font-bold">
+              State Diagram
+            </CardTitle>
+            <CardDescription className="mt-1 text-xs sm:text-sm">
               Visual representation of the automaton with step-by-step
               highlighting.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6 pt-6">
+          <CardContent className="space-y-4 sm:space-y-6 pt-4 sm:pt-6 px-4 sm:px-6">
             {result.automaton ? (
-              <div className="rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-6 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900">
+              <div className="rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-3 sm:p-6 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900">
                 <StateDiagram
                   automaton={result.automaton}
                   activeStates={deriveStatePath}
@@ -529,20 +598,20 @@ export default function HomePage() {
               </div>
             )}
             {result.traces.length > 0 && (
-              <div className="rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-6 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900">
-                <h3 className="mb-4 text-base font-bold text-zinc-900 dark:text-zinc-100">
+              <div className="rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-4 sm:p-6 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900">
+                <h3 className="mb-3 sm:mb-4 text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100">
                   Execution Traces
                 </h3>
-                <ol className="space-y-3">
+                <ol className="space-y-2 sm:space-y-3">
                   {result.traces.map((trace) => (
                     <li
                       key={trace.step}
-                      className="flex items-start gap-4 rounded-lg bg-white p-3 shadow-sm dark:bg-zinc-900 transition-all hover:shadow-md"
+                      className="flex items-start gap-2 sm:gap-4 rounded-lg bg-white p-2.5 sm:p-3 shadow-sm dark:bg-zinc-900 transition-all hover:shadow-md"
                     >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white shadow-md">
+                      <span className="flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-[10px] sm:text-xs font-bold text-white shadow-md">
                         {trace.step}
                       </span>
-                      <p className="pt-0.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                      <p className="pt-0.5 text-xs sm:text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
                         {trace.label}
                       </p>
                     </li>
@@ -565,16 +634,16 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 px-4 py-8 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 sm:px-6 lg:px-8">
-      <main className="mx-auto grid max-w-7xl gap-8 xl:grid-cols-[440px_1fr]">
-        <Card className="order-2 xl:order-1 xl:w-[440px] xl:shrink-0 shadow-lg transition-shadow hover:shadow-xl">
-          <CardHeader className="border-b border-zinc-100 dark:border-zinc-800">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <CardTitle className="text-xl font-bold bg-gradient-to-r from-zinc-900 to-zinc-700 bg-clip-text text-transparent dark:from-zinc-100 dark:to-zinc-300">
+    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 px-3 py-4 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 sm:px-4 sm:py-6 lg:px-6 lg:py-8">
+      <main className="mx-auto grid max-w-7xl gap-4 sm:gap-6 lg:gap-8 xl:grid-cols-[440px_1fr]">
+        <Card className="order-2 xl:order-1 xl:w-[440px] xl:shrink-0 shadow-lg transition-shadow hover:shadow-xl w-full">
+          <CardHeader className="border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6">
+            <div className="flex items-start justify-between gap-3 sm:gap-4">
+              <div className="space-y-1 flex-1 min-w-0">
+                <CardTitle className="text-lg sm:text-xl font-bold bg-gradient-to-r from-zinc-900 to-zinc-700 bg-clip-text text-transparent dark:from-zinc-100 dark:to-zinc-300">
                   Automata Pattern Search
                 </CardTitle>
-                <CardDescription className="text-sm leading-relaxed">
+                <CardDescription className="text-xs sm:text-sm leading-relaxed">
                   Select a mode, load sequences, and inspect how the backend
                   automaton processes your query. Use presets to get started
                   quickly.
@@ -582,25 +651,26 @@ export default function HomePage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-8 pt-6">
+          <CardContent className="space-y-6 sm:space-y-8 pt-4 sm:pt-6 px-4 sm:px-6">
             <form
-              className="space-y-8"
+              className="space-y-6 sm:space-y-8"
               onSubmit={form.handleSubmit(onSubmit)}
               id="simulation-form"
             >
-              <section className="space-y-4">
-                <div className="flex items-center justify-between gap-2">
+              <section className="space-y-3 sm:space-y-4">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <Label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                     Mode
                   </Label>
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-8 gap-2 px-3 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    className="h-9 sm:h-8 gap-1.5 sm:gap-2 px-2.5 sm:px-3 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 touch-manipulation"
                     onClick={handlePreset}
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    Load sample
+                    <span className="hidden xs:inline">Load sample</span>
+                    <span className="xs:hidden">Sample</span>
                   </Button>
                 </div>
                 <ToggleGroup
@@ -614,14 +684,14 @@ export default function HomePage() {
                     <ToggleGroupItem
                       key={mode.value}
                       value={mode.value}
-                      className="transition-all hover:scale-105"
+                      className="transition-all hover:scale-105 min-w-0 flex-1 sm:min-w-[120px] touch-manipulation text-xs sm:text-sm px-2 sm:px-3 py-2.5 sm:py-2"
                     >
                       {mode.label}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
-                <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-4 text-sm text-zinc-700 dark:from-blue-950/30 dark:to-indigo-950/30 dark:text-zinc-300 border border-blue-100 dark:border-blue-900/50">
-                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100 mb-1.5">
+                <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4 text-xs sm:text-sm text-zinc-700 dark:from-blue-950/30 dark:to-indigo-950/30 dark:text-zinc-300 border border-blue-100 dark:border-blue-900/50">
+                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100 mb-1 sm:mb-1.5">
                     {modeMeta.description}
                   </span>
                   <span className="text-xs leading-relaxed">
@@ -630,16 +700,16 @@ export default function HomePage() {
                 </div>
               </section>
 
-              <section className="space-y-5">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+              <section className="space-y-4 sm:space-y-5">
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <Label
                       htmlFor="sequences"
                       className="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
                     >
                       Sequences
                     </Label>
-                    <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
+                    <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md whitespace-nowrap">
                       {sequenceArray.length} detected
                     </span>
                   </div>
@@ -647,7 +717,7 @@ export default function HomePage() {
                     id="sequences"
                     placeholder="ACGT...&#10;ACAT..."
                     rows={6}
-                    className="font-mono text-sm transition-all focus:ring-2 focus:ring-blue-500"
+                    className="font-mono text-xs sm:text-sm transition-all focus:ring-2 focus:ring-blue-500 w-full resize-y"
                     {...form.register("sequences")}
                   />
                   <div className="flex items-center justify-between text-xs text-zinc-500">
@@ -663,7 +733,7 @@ export default function HomePage() {
                   )}
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   <Label
                     htmlFor="inputPath"
                     className="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
@@ -673,7 +743,7 @@ export default function HomePage() {
                   <Input
                     id="inputPath"
                     placeholder="/Users/.../dataset.fasta"
-                    className="font-mono text-sm transition-all focus:ring-2 focus:ring-blue-500"
+                    className="font-mono text-xs sm:text-sm transition-all focus:ring-2 focus:ring-blue-500 w-full"
                     {...form.register("inputPath")}
                   />
                   <p className="text-xs text-zinc-500 leading-relaxed">
@@ -687,8 +757,8 @@ export default function HomePage() {
                 </div>
               </section>
 
-              <section className="space-y-5">
-                <div className="space-y-3">
+              <section className="space-y-4 sm:space-y-5">
+                <div className="space-y-2 sm:space-y-3">
                   <Label
                     htmlFor="pattern"
                     className="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
@@ -699,7 +769,7 @@ export default function HomePage() {
                     id="pattern"
                     placeholder="A(CG|TT)*"
                     rows={3}
-                    className="font-mono text-sm transition-all focus:ring-2 focus:ring-blue-500"
+                    className="font-mono text-xs sm:text-sm transition-all focus:ring-2 focus:ring-blue-500 w-full resize-y"
                     {...form.register("pattern")}
                   />
                   {form.formState.errors.pattern && (
@@ -709,19 +779,19 @@ export default function HomePage() {
                   )}
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-4 rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-5 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-300 dark:hover:border-blue-700">
-                    <div className="flex items-center justify-between">
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
+                  <div className="space-y-3 sm:space-y-4 rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-4 sm:p-5 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-300 dark:hover:border-blue-700">
+                    <div className="flex items-center justify-between gap-2">
                       <Label
                         htmlFor="mismatchBudget"
                         className="text-sm font-semibold"
                       >
                         Mismatch Budget
-                        <span className="ml-2 text-xs font-normal text-zinc-500">
+                        <span className="ml-1 sm:ml-2 text-xs font-normal text-zinc-500">
                           (EFA)
                         </span>
                       </Label>
-                      <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                      <span className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
                         {mismatchBudget ?? 0}
                       </span>
                     </div>
@@ -737,8 +807,8 @@ export default function HomePage() {
                     />
                   </div>
 
-                  <div className="space-y-4 rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-5 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-300 dark:hover:border-blue-700">
-                    <div className="flex items-center justify-between">
+                  <div className="space-y-3 sm:space-y-4 rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-4 sm:p-5 dark:border-zinc-800 dark:from-zinc-900/50 dark:to-zinc-900 transition-all hover:border-blue-300 dark:hover:border-blue-700">
+                    <div className="flex items-center justify-between gap-2">
                       <Label
                         htmlFor="allowDotBracket"
                         className="text-sm font-semibold"
@@ -776,12 +846,12 @@ export default function HomePage() {
                 </Alert>
               )}
 
-              <section className="space-y-3">
+              <section className="space-y-2 sm:space-y-3">
                 <Label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Parameter Preview
                 </Label>
                 <Card className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 dark:from-zinc-900/50 dark:to-zinc-900 border-2 border-zinc-200 dark:border-zinc-800">
-                  <CardContent className="grid gap-3 overflow-hidden py-4 text-sm">
+                  <CardContent className="grid gap-2 sm:gap-3 overflow-hidden py-3 sm:py-4 px-3 sm:px-6 text-xs sm:text-sm">
                     {Object.entries(previewPayload.payload).map(
                       ([key, value]) => {
                         const displayValue =
@@ -791,7 +861,7 @@ export default function HomePage() {
                         return (
                           <div
                             key={key}
-                            className="flex flex-col gap-1.5 rounded-lg bg-white/60 dark:bg-zinc-800/60 p-2.5 text-zinc-700 dark:text-zinc-300 sm:flex-row sm:items-start sm:justify-between"
+                            className="flex flex-col gap-1 sm:gap-1.5 rounded-lg bg-white/60 dark:bg-zinc-800/60 p-2 sm:p-2.5 text-zinc-700 dark:text-zinc-300 sm:flex-row sm:items-start sm:justify-between"
                           >
                             <span className="shrink-0 uppercase tracking-wider text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                               {key.replace(/_/g, " ")}
@@ -808,21 +878,21 @@ export default function HomePage() {
               </section>
             </form>
           </CardContent>
-          <CardFooter className="sticky bottom-0 left-0 right-0 flex flex-col gap-3 border-t border-zinc-200 bg-white/95 py-5 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95 sm:flex-row">
+          <CardFooter className="sticky bottom-0 left-0 right-0 flex flex-col gap-2 sm:gap-3 border-t border-zinc-200 bg-white/95 py-4 sm:py-5 px-4 sm:px-6 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95 sm:flex-row">
             <Button
               type="submit"
               form="simulation-form"
-              className="h-12 w-full gap-2 text-base font-semibold shadow-md transition-all hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+              className="h-11 sm:h-12 w-full gap-2 text-sm sm:text-base font-semibold shadow-md transition-all hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] touch-manipulation"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
                   Running...
                 </>
               ) : (
                 <>
-                  <Play className="h-5 w-5" />
+                  <Play className="h-4 w-4 sm:h-5 sm:w-5" />
                   Run Simulation
                 </>
               )}
@@ -830,17 +900,17 @@ export default function HomePage() {
             <Button
               type="button"
               variant="outline"
-              className="h-12 w-full gap-2 text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="h-11 sm:h-12 w-full gap-2 text-sm sm:text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] touch-manipulation"
               onClick={isSubmitting ? handleCancel : () => form.reset()}
             >
               {isSubmitting ? (
                 <>
-                  <Square className="h-5 w-5" />
+                  <Square className="h-4 w-4 sm:h-5 sm:w-5" />
                   Cancel
                 </>
               ) : (
                 <>
-                  <RefreshCcw className="h-5 w-5" />
+                  <RefreshCcw className="h-4 w-4 sm:h-5 sm:w-5" />
                   Reset Form
                 </>
               )}
@@ -848,11 +918,11 @@ export default function HomePage() {
           </CardFooter>
         </Card>
 
-        <div className="order-1 flex flex-col gap-8 xl:order-2">
+        <div className="order-1 flex flex-col gap-4 sm:gap-6 lg:gap-8 xl:order-2 w-full">
           {networkError && (
             <Alert
               variant="destructive"
-              className="border-2 border-red-300 dark:border-red-900/50 shadow-lg"
+              className="border-2 border-red-300 dark:border-red-900/50 shadow-lg text-sm sm:text-base"
             >
               <span className="font-semibold">{networkError}</span>
             </Alert>
@@ -861,18 +931,18 @@ export default function HomePage() {
           {renderResults()}
 
           <Card className="shadow-lg">
-            <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
-              <CardTitle className="text-xl font-bold">
+            <CardHeader className="border-b border-zinc-200 dark:border-zinc-800 px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl font-bold">
                 Recent Simulations
               </CardTitle>
-              <CardDescription className="mt-1">
+              <CardDescription className="mt-1 text-xs sm:text-sm">
                 Load one of the last five requests.
               </CardDescription>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6 px-4 sm:px-6">
               {history.length === 0 ? (
-                <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-8 text-center dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900">
-                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                <div className="rounded-xl border-2 border-dashed border-zinc-300 bg-gradient-to-br from-zinc-50 to-white p-6 sm:p-8 text-center dark:border-zinc-700 dark:from-zinc-900/50 dark:to-zinc-900">
+                  <p className="text-xs sm:text-sm font-medium text-zinc-500 dark:text-zinc-400">
                     No history yet.
                   </p>
                   <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
@@ -880,22 +950,22 @@ export default function HomePage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {history.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleHistoryLoad(item)}
-                      className="group flex w-full flex-col rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-white to-zinc-50 p-4 text-left transition-all hover:border-blue-400 hover:shadow-md dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-900/50 dark:hover:border-blue-600"
+                      className="group flex w-full flex-col rounded-xl border-2 border-zinc-200 bg-gradient-to-br from-white to-zinc-50 p-3 sm:p-4 text-left transition-all hover:border-blue-400 hover:shadow-md dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-900/50 dark:hover:border-blue-600 touch-manipulation"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="rounded-md bg-blue-100 px-2 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                        <span className="rounded-md bg-blue-100 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
                           {item.summary.modeLabel}
                         </span>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
                           {new Date(item.timestamp).toLocaleString()}
                         </span>
                       </div>
-                      <span className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <span className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {item.summary.matches}/{item.summary.sequenceCount}{" "}
                         matches
                       </span>
@@ -907,38 +977,44 @@ export default function HomePage() {
           </Card>
 
           <Card className="shadow-lg">
-            <CardHeader className="border-b border-zinc-200 dark:border-zinc-800">
-              <CardTitle className="text-xl font-bold">
+            <CardHeader className="border-b border-zinc-200 dark:border-zinc-800 px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl font-bold">
                 Guided Walkthrough
               </CardTitle>
-              <CardDescription className="mt-1">
+              <CardDescription className="mt-1 text-xs sm:text-sm">
                 Compare request/response details across form and results.
               </CardDescription>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6 px-4 sm:px-6">
               <Tabs defaultValue="request">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="request" className="font-semibold">
+                <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6">
+                  <TabsTrigger
+                    value="request"
+                    className="font-semibold text-xs sm:text-sm px-2 sm:px-3 py-2 touch-manipulation"
+                  >
                     Request Schema
                   </TabsTrigger>
-                  <TabsTrigger value="response" className="font-semibold">
+                  <TabsTrigger
+                    value="response"
+                    className="font-semibold text-xs sm:text-sm px-2 sm:px-3 py-2 touch-manipulation"
+                  >
                     Response Notes
                   </TabsTrigger>
                 </TabsList>
-                <TabsContent value="request" className="space-y-4">
-                  <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-5 text-sm text-zinc-700 dark:from-blue-950/30 dark:to-indigo-950/30 dark:text-zinc-300 border border-blue-100 dark:border-blue-900/50">
-                    <p className="leading-relaxed mb-3">
+                <TabsContent value="request" className="space-y-3 sm:space-y-4">
+                  <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-5 text-xs sm:text-sm text-zinc-700 dark:from-blue-950/30 dark:to-indigo-950/30 dark:text-zinc-300 border border-blue-100 dark:border-blue-900/50">
+                    <p className="leading-relaxed mb-2 sm:mb-3">
                       Every run hits{" "}
-                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-2 py-1 font-mono text-xs font-semibold text-blue-700 dark:text-blue-300">
+                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-1.5 sm:px-2 py-0.5 sm:py-1 font-mono text-[10px] sm:text-xs font-semibold text-blue-700 dark:text-blue-300">
                         /simulate
                       </code>{" "}
                       with the parameters listed in the preview card. At least
                       one of{" "}
-                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-2 py-1 font-mono text-xs font-semibold text-blue-700 dark:text-blue-300">
+                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-1.5 sm:px-2 py-0.5 sm:py-1 font-mono text-[10px] sm:text-xs font-semibold text-blue-700 dark:text-blue-300">
                         sequences
                       </code>{" "}
                       or
-                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-2 py-1 font-mono text-xs font-semibold text-blue-700 dark:text-blue-300">
+                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-1.5 sm:px-2 py-0.5 sm:py-1 font-mono text-[10px] sm:text-xs font-semibold text-blue-700 dark:text-blue-300">
                         {" "}
                         input_path
                       </code>{" "}
@@ -950,9 +1026,12 @@ export default function HomePage() {
                     </p>
                   </div>
                 </TabsContent>
-                <TabsContent value="response" className="space-y-4">
-                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-green-50 p-5 text-sm text-zinc-700 dark:from-emerald-950/30 dark:to-green-950/30 dark:text-zinc-300 border border-emerald-100 dark:border-emerald-900/50">
-                    <p className="leading-relaxed mb-3">
+                <TabsContent
+                  value="response"
+                  className="space-y-3 sm:space-y-4"
+                >
+                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-green-50 p-3 sm:p-5 text-xs sm:text-sm text-zinc-700 dark:from-emerald-950/30 dark:to-green-950/30 dark:text-zinc-300 border border-emerald-100 dark:border-emerald-900/50">
+                    <p className="leading-relaxed mb-2 sm:mb-3">
                       The response summary surfaces match counts, runtime, and
                       stack depth. Sequence table lists acceptance status,
                       mismatch chips, and notes.

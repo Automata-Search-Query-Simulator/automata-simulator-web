@@ -190,28 +190,41 @@ export function StateDiagram({
       });
 
       edgeGroups.forEach((edges, edgeKey) => {
-        edges.forEach(({ state, edge, edgeIndex }, groupIndex) => {
+        const isEFA = automaton.kind === "EFA" || automaton.kind === "efa";
+        const isPDA = automaton.kind === "PDA" || automaton.kind === "pda";
+        
+        // For EFA with multiple edges to the same target, combine labels
+        if (isEFA && edges.length > 1 && !isPDA) {
+          const { state, edge } = edges[0];
           const sourcePos = nodePositions.get(state.id);
           const targetPos = nodePositions.get(edge.to);
 
           if (!sourcePos || !targetPos) return;
 
+          // Collect all symbols from edges going to the same target
+          const symbols = edges
+            .map(({ edge }) => {
+              const symbol = edge.literal || edge.symbol || "";
+              return symbol && symbol !== "ε" ? symbol : null;
+            })
+            .filter((s): s is string => s !== null && s !== "")
+            .sort((a, b) => {
+              // Sort: wildcard last, then alphabetically
+              if (a === "*") return 1;
+              if (b === "*") return -1;
+              return a.localeCompare(b);
+            });
+
+          if (symbols.length === 0) return;
+
+          // Combine symbols into a single label
+          // Show all symbols if 5 or fewer, otherwise show first 4 and "..."
+          const combinedLabel = symbols.length > 5 
+            ? `${symbols.slice(0, 4).join(",")},...` 
+            : symbols.join(",");
+
+          // Use the first edge's properties for styling
           const isEpsilon = edge.type === "epsilon";
-          const isPDA = automaton.kind === "PDA" || automaton.kind === "pda";
-          
-          // Build label with PDA operation if available
-          let label = "";
-          if (isPDA && edge.operation) {
-            const symbol = edge.symbol || edge.literal || "";
-            const operationIcon = 
-              edge.operation === "push" ? "⬆" :
-              edge.operation === "pop" ? "⬇" :
-              edge.operation === "ignore" ? "⊘" : "";
-            label = symbol ? `${symbol} ${operationIcon}` : operationIcon;
-          } else {
-            label = isEpsilon ? "ε" : edge.literal || "";
-          }
-          
           const sourceIsActive = currentActive.includes(state.id);
           const isSelfLoop = state.id === edge.to;
           const sourceLevel = levels.get(state.id) ?? 0;
@@ -219,21 +232,96 @@ export function StateDiagram({
           const isBackward = sourceLevel > targetLevel;
           const isSameLevel = sourceLevel === targetLevel;
 
-          // Determine edge type based on relationship
-          // Use smoothstep for curves which helps separate overlapping edges
           let edgeType: "straight" | "smoothstep" | "step" = "smoothstep";
-          
           if (isSelfLoop) {
             edgeType = "smoothstep";
           } else if (isBackward || isSameLevel) {
-            // Use smoothstep for backward or same-level edges to create curves
             edgeType = "smoothstep";
           } else {
-            // Use smoothstep for forward edges too to avoid overlaps
             edgeType = "smoothstep";
           }
 
           flowEdges.push({
+            id: `edge-${state.id}-${edge.to}-combined`,
+            source: `node-${state.id}`,
+            target: `node-${edge.to}`,
+            label: combinedLabel,
+            type: edgeType,
+            animated: sourceIsActive,
+            style: {
+              stroke: isEpsilon ? "#9ca3af" : "#3b82f6",
+              strokeWidth: 2,
+              strokeDasharray: isEpsilon ? "5,5" : undefined,
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: isEpsilon ? "#9ca3af" : "#3b82f6",
+              width: 20,
+              height: 20,
+            },
+            labelStyle: {
+              fill: isEpsilon ? "#6b7280" : "#1e40af",
+              fontWeight: 600,
+              fontSize: 12,
+            },
+            labelBgStyle: {
+              fill: "white",
+              fillOpacity: 0.95,
+              stroke: isEpsilon ? "#9ca3af" : "#3b82f6",
+              strokeWidth: 1,
+            },
+            labelBgPadding: [4, 6],
+            labelBgBorderRadius: 4,
+          });
+        } else {
+          // Original logic: create separate edge for each transition
+          edges.forEach(({ state, edge, edgeIndex }, groupIndex) => {
+            const sourcePos = nodePositions.get(state.id);
+            const targetPos = nodePositions.get(edge.to);
+
+            if (!sourcePos || !targetPos) return;
+
+            const isEpsilon = edge.type === "epsilon";
+            const isPDA = automaton.kind === "PDA" || automaton.kind === "pda";
+            
+            // Build label with PDA operation if available
+            let label = "";
+            if (isPDA && edge.operation) {
+              const symbol = edge.symbol || edge.literal || "";
+              const operationIcon = 
+                edge.operation === "push" ? "⬆" :
+                edge.operation === "pop" ? "⬇" :
+                edge.operation === "ignore" ? "⊘" : "";
+              label = symbol ? `${symbol} ${operationIcon}` : operationIcon;
+            } else {
+              // For EFA and other automata, use literal first, then fall back to symbol
+              // This ensures we get the correct symbol from the API response
+              const symbol = edge.literal || edge.symbol || "";
+              label = isEpsilon ? "ε" : symbol;
+            }
+            
+            const sourceIsActive = currentActive.includes(state.id);
+            const isSelfLoop = state.id === edge.to;
+            const sourceLevel = levels.get(state.id) ?? 0;
+            const targetLevel = levels.get(edge.to) ?? 0;
+            const isBackward = sourceLevel > targetLevel;
+            const isSameLevel = sourceLevel === targetLevel;
+
+            // Determine edge type based on relationship
+            // Use smoothstep for curves which helps separate overlapping edges
+            let edgeType: "straight" | "smoothstep" | "step" = "smoothstep";
+            
+            if (isSelfLoop) {
+              edgeType = "smoothstep";
+            } else if (isBackward || isSameLevel) {
+              // Use smoothstep for backward or same-level edges to create curves
+              edgeType = "smoothstep";
+            } else {
+              // Use smoothstep for forward edges too to avoid overlaps
+              edgeType = "smoothstep";
+            }
+
+            flowEdges.push({
             id: `edge-${state.id}-${edge.to}-${edgeIndex}`,
             source: `node-${state.id}`,
             target: `node-${edge.to}`,
@@ -289,7 +377,8 @@ export function StateDiagram({
             labelBgPadding: [4, 6],
             labelBgBorderRadius: 4,
           });
-        });
+          });
+        }
       });
 
       return { nodes: flowNodes, edges: flowEdges };
@@ -361,27 +450,27 @@ export function StateDiagram({
     <ReactFlowProvider>
       <div className="space-y-4">
         {isPDA && pdaRules && pdaRules.length > 0 && (
-          <div className="rounded-lg border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 p-4 dark:border-purple-900/50 dark:from-purple-950/30 dark:to-indigo-950/30">
+          <div className="rounded-lg border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 p-3 sm:p-4 dark:border-purple-900/50 dark:from-purple-950/30 dark:to-indigo-950/30">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-bold text-purple-900 dark:text-purple-100">
+              <span className="text-xs sm:text-sm font-bold text-purple-900 dark:text-purple-100">
                 PDA Rules:
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {pdaRules.map((rule, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-purple-800 dark:text-purple-200 border-2 border-purple-300 dark:border-purple-600 shadow-sm"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 rounded-md bg-white dark:bg-zinc-800 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-purple-800 dark:text-purple-200 border-2 border-purple-300 dark:border-purple-600 shadow-sm"
                 >
                   <span className="text-purple-700 dark:text-purple-300 font-bold">
                     Expected:
                   </span>
-                  <code className="font-mono text-sm font-bold text-purple-900 dark:text-purple-100">{rule.expected}</code>
+                  <code className="font-mono text-xs sm:text-sm font-bold text-purple-900 dark:text-purple-100">{rule.expected}</code>
                 </span>
               ))}
             </div>
-            <div className="mt-3 flex flex-wrap gap-3 text-xs">
-              <div className="flex items-center gap-1.5 bg-white/60 dark:bg-zinc-800/60 px-2 py-1 rounded border border-purple-200 dark:border-purple-700">
+            <div className="mt-2 sm:mt-3 flex flex-wrap gap-2 sm:gap-3 text-[10px] sm:text-xs">
+              <div className="flex items-center gap-1 sm:gap-1.5 bg-white/60 dark:bg-zinc-800/60 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-purple-200 dark:border-purple-700">
                 <span className="text-green-700 dark:text-green-300 font-bold">⬆ Push</span>
                 <span className="text-zinc-400 dark:text-zinc-500">|</span>
                 <span className="text-red-700 dark:text-red-300 font-bold">⬇ Pop</span>
@@ -392,18 +481,19 @@ export function StateDiagram({
           </div>
         )}
         {statePath.length > 0 && (
-          <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-2 sm:p-3 dark:border-zinc-800 dark:bg-zinc-900 gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handlePlayPause}
                 disabled={statePath.length === 0}
+                className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
               >
                 {isPlaying ? (
-                  <Pause className="h-4 w-4" />
+                  <Pause className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 ) : (
-                  <Play className="h-4 w-4" />
+                  <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 )}
               </Button>
               <Button
@@ -411,19 +501,25 @@ export function StateDiagram({
                 size="sm"
                 onClick={handleStepForward}
                 disabled={currentStep >= statePath.length - 1}
+                className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
               >
-                <SkipForward className="h-4 w-4" />
+                <SkipForward className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
-              <Button variant="outline" size="sm" onClick={handleReset}>
-                <RotateCcw className="h-4 w-4" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleReset}
+                className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
+              >
+                <RotateCcw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
             </div>
-            <div className="text-sm text-zinc-600 dark:text-zinc-400">
+            <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
               Step {currentStep + 1} of {statePath.length}
             </div>
           </div>
         )}
-        <div className="h-[600px] w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="h-[400px] sm:h-[500px] lg:h-[600px] w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <ReactFlow
             nodes={nodes}
             edges={edges}
