@@ -6,7 +6,6 @@ import {
   ApiResponse,
   Automaton,
   SequenceResult,
-  MatchRange,
 } from "./types";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

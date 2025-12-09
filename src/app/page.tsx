@@ -137,124 +137,85 @@ export default function HomePage() {
   }, [activeController]);
 
   const handleHistoryLoad = (item: SimulationHistoryItem) => {
+    // Clear existing form state before applying history values
+    form.reset({
+      mode: "nfa",
+      sequences: "",
+      inputPath: "",
+      pattern: "",
+      mismatchBudget: 0,
+      allowDotBracket: false,
+    });
+
     form.setValue("mode", item.mode as FormValues["mode"]);
+
     if (typeof item.params.pattern === "string") {
       form.setValue("pattern", item.params.pattern);
     }
+
     if (typeof item.params.input_path === "string") {
       form.setValue("inputPath", item.params.input_path);
     }
-    if (typeof item.params.sequences === "string") {
+
+    const storedSequences = item.params.sequences;
+    if (typeof storedSequences === "string") {
       try {
-        const arr = JSON.parse(item.params.sequences) as string[];
+        const arr = JSON.parse(storedSequences) as string[];
         form.setValue("sequences", arr.join("\n"));
       } catch {
-        form.setValue("sequences", "");
+        form.setValue("sequences", storedSequences);
       }
+    } else if (Array.isArray(storedSequences)) {
+      const seqArray = storedSequences
+        .filter((seq): seq is string => typeof seq === "string")
+        .map((seq) => seq.trim())
+        .filter(Boolean);
+      form.setValue("sequences", seqArray.join("\n"));
     }
+
     if (typeof item.params.allow_dot_bracket === "boolean") {
       form.setValue("allowDotBracket", item.params.allow_dot_bracket);
     }
+
     if (typeof item.params.mismatch_budget === "number") {
       form.setValue("mismatchBudget", item.params.mismatch_budget);
     }
   };
 
   const deriveStatePath = useMemo(() => {
-    if (
-      !result?.automaton ||
-      !result?.sequences ||
-      result.sequences.length === 0
-    ) {
+    if (!result?.automaton) {
       return [];
     }
 
+    // Build a breadth-first visitation order from the start state.
     const automaton = result.automaton;
-    const sequence = result.sequences[0];
-    const sequenceText = sequence.sequence;
+    const visited = new Set<number>();
+    const queue: number[] = [];
+    const path: number[] = [];
 
-    if (!sequenceText || sequenceText.length === 0) {
-      return [];
+    if (typeof automaton.start === "number") {
+      queue.push(automaton.start);
     }
 
-    const path: number[] = [automaton.start];
-    let currentStateId = automaton.start;
+    while (queue.length > 0 && path.length < 100) {
+      const stateId = queue.shift();
+      if (stateId === undefined || visited.has(stateId)) continue;
 
-    // Simulate the automaton execution with the actual sequence
-    for (let i = 0; i < sequenceText.length && path.length < 50; i++) {
-      const char = sequenceText[i].toUpperCase(); // Normalize to uppercase for DNA sequences
-      const state = automaton.states.find((s) => s.id === currentStateId);
+      visited.add(stateId);
+      path.push(stateId);
 
-      if (!state) break;
+      const state = automaton.states.find((s) => s.id === stateId);
+      const edges = Array.isArray(state?.edges) ? state?.edges : [];
 
-      // Check if we've reached an accept state
-      if (state.accept || state.id === automaton.accept) {
-        break;
-      }
-
-      const edges = Array.isArray(state.edges) ? state.edges : [];
-      let nextStateId: number | null = null;
-
-      // Try to find a matching transition
-      // First priority: exact match (case-insensitive)
       for (const edge of edges) {
-        if (edge.type === "epsilon") continue;
-
-        const edgeSymbol = (edge.literal || edge.symbol || "").toUpperCase();
-
-        // Exact match
-        if (edgeSymbol === char) {
-          nextStateId = edge.to;
-          break;
+        if (typeof edge.to === "number" && !visited.has(edge.to)) {
+          queue.push(edge.to);
         }
       }
-
-      // Second priority: wildcard match
-      if (nextStateId === null) {
-        for (const edge of edges) {
-          if (edge.type === "epsilon") continue;
-
-          const edgeSymbol = (edge.literal || edge.symbol || "").toUpperCase();
-
-          // Wildcard matches any character
-          if (edgeSymbol === "*" || edgeSymbol === "") {
-            nextStateId = edge.to;
-            break;
-          }
-        }
-      }
-
-      // Third priority: any non-epsilon transition (fallback)
-      if (nextStateId === null) {
-        for (const edge of edges) {
-          if (edge.type !== "epsilon") {
-            nextStateId = edge.to;
-            break;
-          }
-        }
-      }
-
-      if (nextStateId !== null) {
-        path.push(nextStateId);
-        currentStateId = nextStateId;
-      } else {
-        // No valid transition found
-        break;
-      }
-    }
-
-    // Add accept state if we reached it
-    const finalState = automaton.states.find((s) => s.id === currentStateId);
-    if (
-      finalState &&
-      (finalState.accept || currentStateId === automaton.accept) &&
-      !path.includes(currentStateId)
-    ) {
-      path.push(currentStateId);
     }
 
     return path;
-  }, [result?.automaton, result?.sequences]);
+  }, [result?.automaton]);
 
   const renderResults = () => {
     if (isSubmitting) {
@@ -423,12 +384,12 @@ export default function HomePage() {
               Sequence Outcomes
             </CardTitle>
             <CardDescription className="mt-1 text-xs sm:text-sm">
-              Accepted states, mismatches, and stack summaries per sequence.
+              Accepted states, mismatches, and visit summaries per sequence.
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
             <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <table className="w-full min-w-[600px] sm:min-w-[800px] text-xs sm:text-sm">
+              <table className="w-full min-w-[500px] sm:min-w-[700px] text-xs sm:text-sm">
                 <thead className="bg-gradient-to-r from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:to-zinc-800 border-b-2 border-zinc-200 dark:border-zinc-700">
                   <tr className="text-left">
                     <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
@@ -441,13 +402,7 @@ export default function HomePage() {
                       Matches
                     </th>
                     <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                      Coverage
-                    </th>
-                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       States Visited
-                    </th>
-                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                      Stack Depth
                     </th>
                     <th className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       Notes
@@ -455,7 +410,7 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {result.sequences.map((seq, idx) => (
+                  {result.sequences.map((seq) => (
                     <tr
                       key={seq.id}
                       className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
@@ -519,15 +474,6 @@ export default function HomePage() {
                         )}
                       </td>
                       <td className="px-2 sm:px-4 py-3 sm:py-4">
-                        {seq.coverage !== undefined ? (
-                          <span className="font-bold text-purple-600 dark:text-purple-400 text-[10px] sm:text-xs">
-                            {(seq.coverage * 100).toFixed(1)}%
-                          </span>
-                        ) : (
-                          <span className="text-zinc-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4">
                         {seq.statesVisited !== undefined ? (
                           <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs">
                             {seq.statesVisited}
@@ -535,13 +481,6 @@ export default function HomePage() {
                         ) : (
                           <span className="text-zinc-400">—</span>
                         )}
-                      </td>
-                      <td className="px-2 sm:px-4 py-3 sm:py-4">
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-[10px] sm:text-xs">
-                          {seq.stackDepth ?? (
-                            <span className="text-zinc-400">—</span>
-                          )}
-                        </span>
                       </td>
                       <td className="px-2 sm:px-4 py-3 sm:py-4 text-zinc-600 dark:text-zinc-400 text-[10px] sm:text-xs max-w-[100px] sm:max-w-none truncate">
                         {seq.notes ?? <span className="text-zinc-400">—</span>}
