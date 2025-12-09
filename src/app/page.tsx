@@ -39,7 +39,7 @@ import { useSimulate } from "@/features/simulator/hooks/use-simulate";
 import { StateDiagram } from "@/components/automaton/state-diagram";
 
 const RAW_MAX_ITEMS = 50;
-const RAW_MAX_DEPTH = 3;
+const RAW_MAX_DEPTH = Infinity;
 const RAW_MAX_STRING_LENGTH = 2000;
 const RAW_MAX_OUTPUT_LENGTH = 50000;
 
@@ -47,10 +47,6 @@ const formatRawDebug = (value: unknown) => {
   const seen = new WeakSet<object>();
 
   const normalize = (input: unknown, depth: number): unknown => {
-    if (depth > RAW_MAX_DEPTH) {
-      return "[Truncated depth]";
-    }
-
     if (typeof input === "string") {
       if (input.length > RAW_MAX_STRING_LENGTH) {
         return `${input.slice(0, RAW_MAX_STRING_LENGTH)}... (truncated)`;
