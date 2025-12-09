@@ -16,7 +16,8 @@ export type AutomatonEdge = {
 export type AutomatonState = {
   id: number;
   accept: boolean;
-  edges: AutomatonEdge[];
+  edges?: AutomatonEdge[];
+  transitions?: AutomatonEdge[]; // PDA uses transitions instead of edges
   // PDA-specific fields
   stackDepth?: number;
 };

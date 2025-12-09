@@ -90,7 +90,7 @@ export const normalizeResponse = (
       rules: Array.isArray(rawAutomaton.rules) ? rawAutomaton.rules : undefined,
       states: Array.isArray(automatonSource.states)
         ? automatonSource.states.map((state: AutomatonState) => {
-            // Handle different possible edge property names
+            // Handle different possible edge property names (transitions for PDA, edges for others)
             const rawEdges =
               state.edges ??
               (state as Record<string, unknown>).transitions ??
@@ -105,6 +105,7 @@ export const normalizeResponse = (
                 "number"
                   ? ((state as Record<string, unknown>).stackDepth as number)
                   : undefined,
+              // Always use 'edges' for consistency, removing 'transitions' if it exists
               edges: Array.isArray(rawEdges)
                 ? rawEdges.map((edge: unknown) => {
                     // Handle edge as object or different formats
