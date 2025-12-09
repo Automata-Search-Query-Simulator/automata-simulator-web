@@ -28,6 +28,15 @@ export type Automaton = {
   states: AutomatonState[];
   // PDA-specific fields
   rules?: Array<{ expected: string }>;
+  // EFA-specific fields
+  nfa?: {
+    kind: string;
+    start: number;
+    accept: number;
+    states: AutomatonState[];
+  };
+  pattern?: string;
+  mismatchBudget?: number;
 };
 
 export type MatchRange = {

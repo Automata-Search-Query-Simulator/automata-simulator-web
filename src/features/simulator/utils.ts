@@ -5,6 +5,7 @@ import {
   FormValues,
   ApiResponse,
   Automaton,
+  AutomatonState,
   SequenceResult,
 } from "./types";
 
@@ -77,13 +78,18 @@ export const normalizeResponse = (
     const apiResponse = data as unknown as ApiResponse;
     const rawAutomaton = apiResponse.automaton;
 
+    // For EFA, extract the NFA structure
+    const automatonSource = isRecord(rawAutomaton.nfa)
+      ? { ...rawAutomaton, ...rawAutomaton.nfa }
+      : rawAutomaton;
+
     // Normalize automaton structure to ensure all states have edges arrays
     const automaton: Automaton = {
-      ...rawAutomaton,
+      ...automatonSource,
       // Preserve PDA-specific rules if present
       rules: Array.isArray(rawAutomaton.rules) ? rawAutomaton.rules : undefined,
-      states: Array.isArray(rawAutomaton.states)
-        ? rawAutomaton.states.map((state) => {
+      states: Array.isArray(automatonSource.states)
+        ? automatonSource.states.map((state: AutomatonState) => {
             // Handle different possible edge property names
             const rawEdges =
               state.edges ??
@@ -159,7 +165,7 @@ export const normalizeResponse = (
               accept:
                 typeof state.accept === "boolean"
                   ? state.accept
-                  : state.id === rawAutomaton.accept,
+                  : state.id === automatonSource.accept,
             };
           })
         : [],
