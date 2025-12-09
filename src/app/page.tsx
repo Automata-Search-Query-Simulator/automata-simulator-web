@@ -38,6 +38,86 @@ import { useRecentSimulations } from "@/features/simulator/hooks/use-recent-simu
 import { useSimulate } from "@/features/simulator/hooks/use-simulate";
 import { StateDiagram } from "@/components/automaton/state-diagram";
 
+const RAW_MAX_ITEMS = 50;
+const RAW_MAX_DEPTH = 3;
+const RAW_MAX_STRING_LENGTH = 2000;
+const RAW_MAX_OUTPUT_LENGTH = 50000;
+
+const formatRawDebug = (value: unknown) => {
+  const seen = new WeakSet<object>();
+
+  const normalize = (input: unknown, depth: number): unknown => {
+    if (depth > RAW_MAX_DEPTH) {
+      return "[Truncated depth]";
+    }
+
+    if (typeof input === "string") {
+      if (input.length > RAW_MAX_STRING_LENGTH) {
+        return `${input.slice(0, RAW_MAX_STRING_LENGTH)}... (truncated)`;
+      }
+      return input;
+    }
+
+    if (input && typeof input === "object") {
+      if (seen.has(input as object)) {
+        return "[Circular]";
+      }
+      seen.add(input as object);
+
+      if (Array.isArray(input)) {
+        const items = input
+          .slice(0, RAW_MAX_ITEMS)
+          .map((item) => normalize(item, depth + 1));
+        if (input.length > RAW_MAX_ITEMS) {
+          items.push(`... ${input.length - RAW_MAX_ITEMS} more items`);
+        }
+        return items;
+      }
+
+      const entries = Object.entries(input as Record<string, unknown>);
+      const limited: Record<string, unknown> = {};
+      for (let i = 0; i < entries.length && i < RAW_MAX_ITEMS; i += 1) {
+        const [key, val] = entries[i];
+        limited[key] = normalize(val, depth + 1);
+      }
+      if (entries.length > RAW_MAX_ITEMS) {
+        limited.__truncated__ = `... ${
+          entries.length - RAW_MAX_ITEMS
+        } more keys`;
+      }
+      return limited;
+    }
+
+    return input;
+  };
+
+  try {
+    const prepared = normalize(value, 0);
+    const serialized = JSON.stringify(
+      prepared,
+      (_key, val) => (typeof val === "bigint" ? val.toString() : val),
+      2
+    );
+
+    if (!serialized) {
+      return "";
+    }
+
+    if (serialized.length > RAW_MAX_OUTPUT_LENGTH) {
+      return `${serialized.slice(
+        0,
+        RAW_MAX_OUTPUT_LENGTH
+      )}\n... truncated for display (${serialized.length} chars)`;
+    }
+
+    return serialized;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown serialization error";
+    return `Unable to render raw response: ${message}`;
+  }
+};
+
 export default function HomePage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -119,8 +199,14 @@ export default function HomePage() {
   };
 
   const onSubmit = (values: FormValues) => {
+    // Abort any in-flight request to avoid stale results winning races
+    if (activeController) {
+      activeController.abort();
+    }
+
     const controller = new AbortController();
     setNetworkError(null);
+    setResult(null);
     setActiveController(controller);
     simulate(values, modeMeta.label, controller);
   };
@@ -216,6 +302,8 @@ export default function HomePage() {
 
     return path;
   }, [result?.automaton]);
+
+  const rawDebug = useMemo(() => formatRawDebug(result?.raw), [result?.raw]);
 
   const renderResults = () => {
     if (isSubmitting) {
@@ -563,7 +651,7 @@ export default function HomePage() {
                 Raw Response Debug
               </summary>
               <pre className="mt-4 max-h-64 overflow-auto rounded-lg bg-gradient-to-br from-zinc-900 to-zinc-800 p-4 text-xs text-green-200 shadow-inner border border-zinc-700">
-                {JSON.stringify(result.raw, null, 2)}
+                {rawDebug}
               </pre>
             </details>
           </CardContent>
@@ -681,7 +769,7 @@ export default function HomePage() {
                   </Label>
                   <Input
                     id="inputPath"
-                    placeholder="/Users/.../dataset.fasta"
+                    placeholder="/Users/.../dataset.txt"
                     className="font-mono text-xs sm:text-sm transition-all focus:ring-2 focus:ring-blue-500 w-full"
                     {...form.register("inputPath")}
                   />
