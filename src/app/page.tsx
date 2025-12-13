@@ -39,7 +39,6 @@ import { useSimulate } from "@/features/simulator/hooks/use-simulate";
 import { StateDiagram } from "@/components/automaton/state-diagram";
 
 const RAW_MAX_ITEMS = 50;
-const RAW_MAX_DEPTH = Infinity;
 const RAW_MAX_STRING_LENGTH = 2000;
 const RAW_MAX_OUTPUT_LENGTH = 50000;
 

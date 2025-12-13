@@ -39,19 +39,6 @@ export function StateDiagram({
 
   const isPDA = automaton?.kind === "PDA" || automaton?.kind === "pda";
   const pdaRules = automaton?.rules;
-  const hasStates =
-    Array.isArray(automaton?.states) && automaton.states.length > 0;
-  const fitViewOptions = useMemo(
-    () => ({ padding: 0.3, minZoom: 0.5, maxZoom: 1.5 }),
-    []
-  );
-  const defaultEdgeOptions = useMemo(
-    () => ({
-      type: "smoothstep",
-      animated: false,
-    }),
-    []
-  );
 
   const statePath = useMemo(() => {
     if (!automaton || activeStates.length === 0) return [];
@@ -632,7 +619,6 @@ export function StateDiagram({
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={handlePlayPause}
                   disabled={statePath.length === 0}
                   className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
@@ -645,7 +631,6 @@ export function StateDiagram({
                 </Button>
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={handleStepForward}
                   disabled={currentStep >= statePath.length - 1}
                   className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
@@ -654,7 +639,6 @@ export function StateDiagram({
                 </Button>
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={handleReset}
                   className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
                 >
@@ -669,48 +653,36 @@ export function StateDiagram({
         )}
         {!isPDA && (
           <div className="h-[400px] sm:h-[500px] lg:h-[600px] w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-            {hasStates && nodes.length === 0 && edges.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-sm text-zinc-600 dark:text-zinc-300">
-                <p className="font-semibold text-zinc-800 dark:text-zinc-100">
-                  State diagram could not be rendered.
-                </p>
-                <p className="max-w-md text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-                  Try rerunning the simulation or refreshing the page. If the
-                  issue persists on this device, check browser console errors or
-                  API responses for missing automaton data.
-                </p>
-              </div>
-            ) : (
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onNodeClick={handleNodeClick}
-                fitView
-                fitViewOptions={fitViewOptions}
-                defaultEdgeOptions={defaultEdgeOptions}
-              >
-                <Background />
-                <Controls />
-                <MiniMap
-                  nodeColor={(node) => {
-                    const stateId = parseInt(node.id.replace("node-", ""));
-                    const state = automaton?.states.find(
-                      (s) => s.id === stateId
-                    );
-                    if (state?.id === automaton?.accept || state?.accept) {
-                      return "#22c55e";
-                    }
-                    if (state?.id === automaton?.start) {
-                      return "#3b82f6";
-                    }
-                    return "#e5e7eb";
-                  }}
-                  maskColor="rgba(0, 0, 0, 0.1)"
-                />
-              </ReactFlow>
-            )}
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={handleNodeClick}
+              fitView
+              fitViewOptions={{ padding: 0.3, minZoom: 0.5, maxZoom: 1.5 }}
+              defaultEdgeOptions={{
+                type: "smoothstep",
+                animated: false,
+              }}
+            >
+              <Background />
+              <Controls />
+              <MiniMap
+                nodeColor={(node) => {
+                  const stateId = parseInt(node.id.replace("node-", ""));
+                  const state = automaton?.states.find((s) => s.id === stateId);
+                  if (state?.id === automaton?.accept || state?.accept) {
+                    return "#22c55e";
+                  }
+                  if (state?.id === automaton?.start) {
+                    return "#3b82f6";
+                  }
+                  return "#e5e7eb";
+                }}
+                maskColor="rgba(0, 0, 0, 0.1)"
+              />
+            </ReactFlow>
           </div>
         )}
       </div>
