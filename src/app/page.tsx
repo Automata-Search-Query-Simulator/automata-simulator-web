@@ -37,7 +37,7 @@ import {
 import { useRecentSimulations } from "@/features/simulator/hooks/use-recent-simulations";
 import { useSimulate } from "@/features/simulator/hooks/use-simulate";
 import { StateDiagram } from "@/components/automaton/state-diagram";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 const RAW_MAX_ITEMS = 50;
 const RAW_MAX_STRING_LENGTH = 2000;
@@ -148,13 +148,19 @@ export default function HomePage() {
       return { description: "", status: undefined, statusLabel: undefined };
     }
     const statusMatch = trimmed.match(/\[(.*?)\]\s*$/);
-    const statusLabel = statusMatch ? statusMatch[1]?.trim().toUpperCase() : undefined;
-    let description = statusMatch && typeof statusMatch.index === "number"
-      ? trimmed.slice(0, statusMatch.index).trim()
-      : trimmed;
+    const statusLabel = statusMatch
+      ? statusMatch[1]?.trim().toUpperCase()
+      : undefined;
+    let description =
+      statusMatch && typeof statusMatch.index === "number"
+        ? trimmed.slice(0, statusMatch.index).trim()
+        : trimmed;
     description = description.replace(/->\s*valid\?\s*$/i, "").trim();
     const status =
-      statusLabel && (statusLabel.startsWith("O") || statusLabel.includes("PASS") || statusLabel.includes("VALID"))
+      statusLabel &&
+      (statusLabel.startsWith("O") ||
+        statusLabel.includes("PASS") ||
+        statusLabel.includes("VALID"))
         ? "ok"
         : statusLabel
         ? "fail"
@@ -165,7 +171,6 @@ export default function HomePage() {
   const [result, setResult] = useState<NormalizedResult | null>(null);
   const [activeController, setActiveController] =
     useState<AbortController | null>(null);
-  const { toast } = useToast();
 
   const { simulate, isSubmitting } = useSimulate({
     onSuccess: (normalized) => {
@@ -180,10 +185,8 @@ export default function HomePage() {
       setActiveController(null);
     },
     onError: (errorMessage) => {
-      toast({
-        title: "Simulation error",
+      toast.error("Simulation error", {
         description: errorMessage,
-        variant: "destructive",
       });
       setActiveController(null);
     },
@@ -388,8 +391,8 @@ export default function HomePage() {
     }
 
     const showRnaEnhancedOutcomes =
-      ((result.summary.modeLabel ?? "").toLowerCase().includes("pda") &&
-        result.sequences.some((seq) => seq.primarySequence || seq.dotBracket));
+      (result.summary.modeLabel ?? "").toLowerCase().includes("pda") &&
+      result.sequences.some((seq) => seq.primarySequence || seq.dotBracket);
 
     return (
       <div className="space-y-8">
@@ -518,9 +521,7 @@ export default function HomePage() {
           </CardHeader>
           <CardContent
             className={
-              showRnaEnhancedOutcomes
-                ? "p-4 sm:p-6"
-                : "overflow-x-auto p-0"
+              showRnaEnhancedOutcomes ? "p-4 sm:p-6" : "overflow-x-auto p-0"
             }
           >
             {showRnaEnhancedOutcomes ? (
@@ -566,7 +567,9 @@ export default function HomePage() {
                         <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
                           <div className="space-y-1 flex-1 min-w-0">
                             <p className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-semibold">
-                              {seq.primarySequence ? "Primary sequence" : "Sequence"}
+                              {seq.primarySequence
+                                ? "Primary sequence"
+                                : "Sequence"}
                             </p>
                             <p className="font-mono text-sm sm:text-base lg:text-lg font-semibold text-zinc-900 dark:text-zinc-50 break-words whitespace-pre-wrap">
                               {baseSequence}
@@ -680,7 +683,9 @@ export default function HomePage() {
                               Mismatches
                             </p>
                             <p className="text-lg font-bold text-rose-700 dark:text-rose-200">
-                              {seq.mismatches !== undefined ? seq.mismatches : "—"}
+                              {seq.mismatches !== undefined
+                                ? seq.mismatches
+                                : "—"}
                             </p>
                             {mismatchList && (
                               <p className="text-[10px] text-rose-500 dark:text-rose-300">
@@ -754,173 +759,190 @@ export default function HomePage() {
                           .toLowerCase()
                           .includes("pda") && !seq.primarySequence;
                       const formattedChecks =
-                        seq.rnaChecks?.map((check) => formatRnaCheck(check)) ?? [];
+                        seq.rnaChecks?.map((check) => formatRnaCheck(check)) ??
+                        [];
                       return (
-                      <tr
-                        key={seq.id}
-                        className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-                      >
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 font-mono text-[10px] sm:text-xs text-zinc-900 dark:text-zinc-100">
-                          <div className="max-w-[220px] sm:max-w-md space-y-1">
-                            {seq.primarySequence ? (
-                              <div className="rounded-lg border border-zinc-200 bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/40 p-2 sm:p-3 space-y-2 shadow-sm">
-                                <div className="space-y-0.5">
-                                  <span className="text-[9px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-semibold">
-                                    Primary sequence
-                                  </span>
-                                  <p className="font-mono text-[11px] sm:text-xs font-semibold text-zinc-900 dark:text-zinc-100 break-words whitespace-pre-wrap">
-                                    {seq.primarySequence}
-                                  </p>
-                                </div>
-                                {seq.dotBracket && (
+                        <tr
+                          key={seq.id}
+                          className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                        >
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 font-mono text-[10px] sm:text-xs text-zinc-900 dark:text-zinc-100">
+                            <div className="max-w-[220px] sm:max-w-md space-y-1">
+                              {seq.primarySequence ? (
+                                <div className="rounded-lg border border-zinc-200 bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/40 p-2 sm:p-3 space-y-2 shadow-sm">
                                   <div className="space-y-0.5">
-                                    <span className="text-[9px] uppercase tracking-wider text-blue-500 dark:text-blue-300 font-semibold">
-                                      Secondary structure
+                                    <span className="text-[9px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-semibold">
+                                      Primary sequence
                                     </span>
-                                    <p className="font-mono text-[11px] sm:text-xs text-blue-900 dark:text-blue-100 break-words">
-                                      {seq.dotBracket}
+                                    <p className="font-mono text-[11px] sm:text-xs font-semibold text-zinc-900 dark:text-zinc-100 break-words whitespace-pre-wrap">
+                                      {seq.primarySequence}
                                     </p>
                                   </div>
-                                )}
-                                {(seq.rnaResult || seq.rnaValidBases !== undefined) && (
-                                  <div className="flex flex-wrap gap-1 sm:gap-1.5">
-                                    {seq.rnaResult && (
-                                      <span
-                                        className={`inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold border ${
-                                          seq.rnaResult.toLowerCase() === "valid"
-                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-800"
-                                            : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-200 dark:border-rose-800"
-                                        }`}
-                                      >
-                                        {seq.rnaResult}
+                                  {seq.dotBracket && (
+                                    <div className="space-y-0.5">
+                                      <span className="text-[9px] uppercase tracking-wider text-blue-500 dark:text-blue-300 font-semibold">
+                                        Secondary structure
                                       </span>
-                                    )}
-                                    {seq.rnaValidBases !== undefined && (
-                                      <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold border bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700">
-                                        {seq.rnaValidBases ? "Valid RNA bases" : "Invalid RNA bases"}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                {formattedChecks.length > 0 && (
-                                  <div className="mt-1 rounded-md border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-200 dark:divide-zinc-800 bg-white/70 dark:bg-zinc-900/40">
-                                    {formattedChecks.map((check, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="flex items-center justify-between gap-2 px-2 py-1 text-[9px] sm:text-[10px]"
-                                      >
-                                        <span className="flex-1 text-zinc-600 dark:text-zinc-300 break-words">
-                                          {check.description || seq.rnaChecks?.[idx]}
-                                        </span>
-                                        {check.status && (
-                                          <span
-                                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
-                                              check.status === "ok"
-                                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
-                                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
-                                            }`}
-                                          >
-                                            {check.statusLabel ?? (check.status === "ok" ? "OK" : "ERR")}
-                                          </span>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {seq.rnaMessages?.length ? (
-                                  <div className="mt-1 space-y-0.5 text-[9px] sm:text-[10px] text-amber-600 dark:text-amber-300">
-                                    {seq.rnaMessages.map((message, idx) => (
-                                      <p key={idx} className="break-words">
-                                        {message}
+                                      <p className="font-mono text-[11px] sm:text-xs text-blue-900 dark:text-blue-100 break-words">
+                                        {seq.dotBracket}
                                       </p>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : seq.dotBracket ? (
-                              <div className="space-y-0.5">
-                                <span className="text-[9px] uppercase tracking-wider text-blue-500 dark:text-blue-300 font-semibold">
-                                  Secondary
-                                </span>
-                                <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
-                                  {seq.dotBracket}
+                                    </div>
+                                  )}
+                                  {(seq.rnaResult ||
+                                    seq.rnaValidBases !== undefined) && (
+                                    <div className="flex flex-wrap gap-1 sm:gap-1.5">
+                                      {seq.rnaResult && (
+                                        <span
+                                          className={`inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold border ${
+                                            seq.rnaResult.toLowerCase() ===
+                                            "valid"
+                                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-800"
+                                              : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-200 dark:border-rose-800"
+                                          }`}
+                                        >
+                                          {seq.rnaResult}
+                                        </span>
+                                      )}
+                                      {seq.rnaValidBases !== undefined && (
+                                        <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold border bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700">
+                                          {seq.rnaValidBases
+                                            ? "Valid RNA bases"
+                                            : "Invalid RNA bases"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                  {formattedChecks.length > 0 && (
+                                    <div className="mt-1 rounded-md border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-200 dark:divide-zinc-800 bg-white/70 dark:bg-zinc-900/40">
+                                      {formattedChecks.map((check, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center justify-between gap-2 px-2 py-1 text-[9px] sm:text-[10px]"
+                                        >
+                                          <span className="flex-1 text-zinc-600 dark:text-zinc-300 break-words">
+                                            {check.description ||
+                                              seq.rnaChecks?.[idx]}
+                                          </span>
+                                          {check.status && (
+                                            <span
+                                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+                                                check.status === "ok"
+                                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+                                                  : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
+                                              }`}
+                                            >
+                                              {check.statusLabel ??
+                                                (check.status === "ok"
+                                                  ? "OK"
+                                                  : "ERR")}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {seq.rnaMessages?.length ? (
+                                    <div className="mt-1 space-y-0.5 text-[9px] sm:text-[10px] text-amber-600 dark:text-amber-300">
+                                      {seq.rnaMessages.map((message, idx) => (
+                                        <p key={idx} className="break-words">
+                                          {message}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  ) : null}
                                 </div>
-                              </div>
-                            ) : (
-                              <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
-                                {seq.sequence}
-                              </div>
-                            )}
-                          </div>
-                          {seq.matchRanges &&
-                            seq.matchRanges.length > 0 &&
-                            !isPdaSecondaryOnly && (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {seq.matchRanges.map((range, idx) => (
-                                <span
-                                  key={idx}
-                                  className="rounded-md bg-gradient-to-r from-blue-100 to-blue-200 px-2 py-1 text-xs font-semibold text-blue-700 shadow-sm dark:from-blue-900/50 dark:to-blue-800/50 dark:text-blue-200"
-                                >
-                                  {range.range}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4">
-                          {seq.accepted === undefined ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                              <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-zinc-400"></span>
-                              <span className="hidden sm:inline">pending</span>
-                              <span className="sm:hidden">P</span>
-                            </span>
-                          ) : seq.accepted ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-emerald-700 shadow-sm dark:from-emerald-900/50 dark:to-green-900/50 dark:text-emerald-200">
-                              <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-emerald-500"></span>
-                              <span className="hidden sm:inline">accepted</span>
-                              <span className="sm:hidden">A</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-red-100 to-rose-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-red-700 shadow-sm dark:from-red-900/50 dark:to-rose-900/50 dark:text-red-200">
-                              <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-red-500"></span>
-                              <span className="hidden sm:inline">rejected</span>
-                              <span className="sm:hidden">R</span>
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4">
-                          {seq.matchRanges && !isPdaSecondaryOnly ? (
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
-                              {seq.matchRanges.length}
-                            </span>
-                          ) : seq.mismatches !== undefined ? (
-                            <div className="flex flex-col gap-1">
-                              <span className="font-bold text-zinc-900 dark:text-zinc-100">
-                                {seq.mismatches}
-                              </span>
-                              {!!seq.mismatchPositions?.length && (
-                                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  {seq.mismatchPositions.join(", ")}
-                                </span>
+                              ) : seq.dotBracket ? (
+                                <div className="space-y-0.5">
+                                  <span className="text-[9px] uppercase tracking-wider text-blue-500 dark:text-blue-300 font-semibold">
+                                    Secondary
+                                  </span>
+                                  <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                                    {seq.dotBracket}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                                  {seq.sequence}
+                                </div>
                               )}
                             </div>
-                          ) : (
-                            <span className="text-zinc-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4">
-                          {seq.statesVisited !== undefined ? (
-                            <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs">
-                              {seq.statesVisited}
-                            </span>
-                          ) : (
-                            <span className="text-zinc-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-zinc-600 dark:text-zinc-400 text-[10px] sm:text-xs max-w-[100px] sm:max-w-none truncate">
-                          {seq.notes ?? <span className="text-zinc-400">—</span>}
-                        </td>
-                      </tr>
+                            {seq.matchRanges &&
+                              seq.matchRanges.length > 0 &&
+                              !isPdaSecondaryOnly && (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {seq.matchRanges.map((range, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="rounded-md bg-gradient-to-r from-blue-100 to-blue-200 px-2 py-1 text-xs font-semibold text-blue-700 shadow-sm dark:from-blue-900/50 dark:to-blue-800/50 dark:text-blue-200"
+                                    >
+                                      {range.range}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4">
+                            {seq.accepted === undefined ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-zinc-400"></span>
+                                <span className="hidden sm:inline">
+                                  pending
+                                </span>
+                                <span className="sm:hidden">P</span>
+                              </span>
+                            ) : seq.accepted ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-emerald-700 shadow-sm dark:from-emerald-900/50 dark:to-green-900/50 dark:text-emerald-200">
+                                <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-emerald-500"></span>
+                                <span className="hidden sm:inline">
+                                  accepted
+                                </span>
+                                <span className="sm:hidden">A</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-red-100 to-rose-100 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-red-700 shadow-sm dark:from-red-900/50 dark:to-rose-900/50 dark:text-red-200">
+                                <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-red-500"></span>
+                                <span className="hidden sm:inline">
+                                  rejected
+                                </span>
+                                <span className="sm:hidden">R</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4">
+                            {seq.matchRanges && !isPdaSecondaryOnly ? (
+                              <span className="font-bold text-blue-600 dark:text-blue-400">
+                                {seq.matchRanges.length}
+                              </span>
+                            ) : seq.mismatches !== undefined ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                                  {seq.mismatches}
+                                </span>
+                                {!!seq.mismatchPositions?.length && (
+                                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                                    {seq.mismatchPositions.join(", ")}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-zinc-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4">
+                            {seq.statesVisited !== undefined ? (
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs">
+                                {seq.statesVisited}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-zinc-600 dark:text-zinc-400 text-[10px] sm:text-xs max-w-[100px] sm:max-w-none truncate">
+                            {seq.notes ?? (
+                              <span className="text-zinc-400">—</span>
+                            )}
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>
@@ -1402,23 +1424,23 @@ export default function HomePage() {
                         /simulate
                       </code>{" "}
                       with the parameters listed in the preview card. At least
-                    one of{" "}
-                    <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-1.5 sm:px-2 py-0.5 sm:py-1 font-mono text-[10px] sm:text-xs font-semibold text-blue-700 dark:text-blue-300">
-                      sequences
-                    </code>{" "}
-                    or
+                      one of{" "}
                       <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-1.5 sm:px-2 py-0.5 sm:py-1 font-mono text-[10px] sm:text-xs font-semibold text-blue-700 dark:text-blue-300">
-                      {" "}
-                      input_path
-                    </code>{" "}
-                      is required unless RNA primary validation is turned off
-                      in Dot-Bracket mode.
-                  </p>
-                  <p className="leading-relaxed">
-                    Requests automatically normalize casing (DNA) and enforce
-                    mismatch budgets plus RNA validation toggles based on the
-                    active mode.
-                  </p>
+                        sequences
+                      </code>{" "}
+                      or
+                      <code className="rounded-md bg-white/80 dark:bg-zinc-900/80 px-1.5 sm:px-2 py-0.5 sm:py-1 font-mono text-[10px] sm:text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        {" "}
+                        input_path
+                      </code>{" "}
+                      is required unless RNA primary validation is turned off in
+                      Dot-Bracket mode.
+                    </p>
+                    <p className="leading-relaxed">
+                      Requests automatically normalize casing (DNA) and enforce
+                      mismatch budgets plus RNA validation toggles based on the
+                      active mode.
+                    </p>
                   </div>
                 </TabsContent>
                 <TabsContent
