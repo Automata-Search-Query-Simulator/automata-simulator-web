@@ -1115,9 +1115,7 @@ export default function HomePage() {
                     <Textarea
                       id="sequences"
                       placeholder={
-                        isPdaMode
-                          ? "CGUAGCUCUG&#10;AUGCAUGCAU"
-                          : "ACGT...&#10;ACAT..."
+                        isPdaMode ? "CGUAGCUCUG;AUGCAUGCAU" : "ACGT...;ACAT..."
                       }
                       rows={6}
                       className="font-mono text-xs sm:text-sm transition-all focus:ring-2 focus:ring-blue-500 w-full resize-y"
