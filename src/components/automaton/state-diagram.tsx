@@ -401,7 +401,7 @@ export function StateDiagram({
   );
 
   useEffect(() => {
-    if (!automaton || isPDA) {
+    if (!automaton) {
       setNodes([]);
       setEdges([]);
       return;
@@ -417,7 +417,6 @@ export function StateDiagram({
     automaton,
     currentActiveStates,
     convertAutomatonToFlow,
-    isPDA,
     setNodes,
     setEdges,
   ]);
@@ -494,34 +493,6 @@ export function StateDiagram({
     );
   }
 
-  const pdaExamples = [
-    {
-      example: "(((...)))",
-      verdict: "accept",
-      description: "Nested helix; dots are unpaired bases",
-    },
-    {
-      example: "..((..)).",
-      verdict: "accept",
-      description: "Paired stem with flanking unpaired bases",
-    },
-    {
-      example: "(.((.).)).",
-      verdict: "accept",
-      description: "Mixed nesting; dots ignored",
-    },
-    {
-      example: "(()",
-      verdict: "reject",
-      description: "Missing closing parenthesis",
-    },
-    {
-      example: "())(",
-      verdict: "reject",
-      description: "Pairing order broken",
-    },
-  ];
-
   return (
     <ReactFlowProvider>
       <div className="space-y-4">
@@ -564,127 +535,75 @@ export function StateDiagram({
             </div>
           </div>
         )}
-        {isPDA ? (
-          <div className="rounded-lg border-2 border-purple-200 bg-linear-to-br from-purple-50 to-indigo-50 p-4 sm:p-6 dark:border-purple-900/50 dark:from-purple-950/30 dark:to-indigo-950/30">
-            <div className="flex flex-col gap-2 sm:gap-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse"></span>
-                  <p className="text-sm sm:text-base font-bold text-purple-900 dark:text-purple-100">
-                    PDA uses a fixed validation pattern
-                  </p>
-                </div>
-                <span className="rounded-full bg-white/70 px-2.5 py-1 text-[10px] sm:text-xs font-semibold text-purple-800 dark:bg-zinc-800 dark:text-purple-200 border border-purple-200 dark:border-purple-700">
-                  Dot-bracket guidance
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-purple-900/80 dark:text-purple-200/80">
-                Validate RNA secondary-structure dot-bracket strings:
-                parentheses must be balanced and properly ordered; dots (.) mark
-                unpaired bases and are ignored by the stack. Extra closings or
-                leftover openings are rejected. Use these examples as the fixed
-                reference diagram.
-              </p>
-              <div className="grid gap-2 sm:gap-3 md:grid-cols-2">
-                {pdaExamples.map((item) => (
-                  <div
-                    key={item.example}
-                    className="flex items-center justify-between rounded-lg border border-purple-200 bg-white/80 px-3 py-2.5 shadow-sm dark:border-purple-800 dark:bg-zinc-900"
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-mono text-sm sm:text-base font-semibold text-purple-900 dark:text-purple-50">
-                        {item.example}
-                      </span>
-                      <span className="text-[11px] sm:text-xs text-purple-700 dark:text-purple-200/80">
-                        {item.description}
-                      </span>
-                    </div>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] sm:text-xs font-bold ${
-                        item.verdict === "accept"
-                          ? "bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/40 dark:text-green-200 dark:border-green-800"
-                          : "bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-200 dark:border-red-800"
-                      }`}
-                    >
-                      {item.verdict}
-                    </span>
-                  </div>
-                ))}
-              </div>
+
+        {statePath.length > 0 && (
+          <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-2 sm:p-3 dark:border-zinc-800 dark:bg-zinc-900 gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Button
+                variant="outline"
+                onClick={handlePlayPause}
+                disabled={statePath.length === 0}
+                className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
+              >
+                {isPlaying ? (
+                  <Pause className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleStepForward}
+                disabled={currentStep >= statePath.length - 1}
+                className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
+              >
+                <SkipForward className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
+              >
+                <RotateCcw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              </Button>
+            </div>
+            <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+              Step {currentStep + 1} of {statePath.length}
             </div>
           </div>
-        ) : (
-          statePath.length > 0 && (
-            <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-2 sm:p-3 dark:border-zinc-800 dark:bg-zinc-900 gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handlePlayPause}
-                  disabled={statePath.length === 0}
-                  className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
-                >
-                  {isPlaying ? (
-                    <Pause className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  ) : (
-                    <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleStepForward}
-                  disabled={currentStep >= statePath.length - 1}
-                  className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
-                >
-                  <SkipForward className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleReset}
-                  className="h-8 sm:h-9 w-8 sm:w-9 p-0 touch-manipulation"
-                >
-                  <RotateCcw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                </Button>
-              </div>
-              <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
-                Step {currentStep + 1} of {statePath.length}
-              </div>
-            </div>
-          )
         )}
-        {!isPDA && (
-          <div className="h-[400px] sm:h-[500px] lg:h-[600px] w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeClick={handleNodeClick}
-              fitView
-              fitViewOptions={{ padding: 0.3, minZoom: 0.5, maxZoom: 1.5 }}
-              defaultEdgeOptions={{
-                type: "smoothstep",
-                animated: false,
+        <div className="h-[400px] sm:h-[500px] lg:h-[600px] w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={handleNodeClick}
+            fitView
+            fitViewOptions={{ padding: 0.3, minZoom: 0.5, maxZoom: 1.5 }}
+            defaultEdgeOptions={{
+              type: "smoothstep",
+              animated: false,
+            }}
+          >
+            <Background />
+            <Controls />
+            <MiniMap
+              nodeColor={(node) => {
+                const stateId = parseInt(node.id.replace("node-", ""));
+                const state = automaton?.states.find((s) => s.id === stateId);
+                if (state?.id === automaton?.accept || state?.accept) {
+                  return "#22c55e";
+                }
+                if (state?.id === automaton?.start) {
+                  return "#3b82f6";
+                }
+                return "#e5e7eb";
               }}
-            >
-              <Background />
-              <Controls />
-              <MiniMap
-                nodeColor={(node) => {
-                  const stateId = parseInt(node.id.replace("node-", ""));
-                  const state = automaton?.states.find((s) => s.id === stateId);
-                  if (state?.id === automaton?.accept || state?.accept) {
-                    return "#22c55e";
-                  }
-                  if (state?.id === automaton?.start) {
-                    return "#3b82f6";
-                  }
-                  return "#e5e7eb";
-                }}
-                maskColor="rgba(0, 0, 0, 0.1)"
-              />
-            </ReactFlow>
-          </div>
-        )}
+              maskColor="rgba(0, 0, 0, 0.1)"
+            />
+          </ReactFlow>
+        </div>
       </div>
     </ReactFlowProvider>
   );

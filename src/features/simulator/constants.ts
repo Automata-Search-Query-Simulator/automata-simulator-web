@@ -46,8 +46,8 @@ export const SAMPLE_PRESETS: Record<
   dfa: { pattern: "ATG(C|T)A", sequences: "ATGCA\nATGTA" },
   efa: { pattern: "ACGTACGT", sequences: "ACGTACGT\nACCTACGT" },
   pda: {
-    pattern: "..((..))",
-    sequences: "..((..))",
+    pattern: "(..((..)))",
+    sequences: "CGUAGCUCUG\nAUGCAUGCAU",
     allowDotBracket: true,
   },
 };

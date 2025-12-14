@@ -7,6 +7,7 @@ import {
   Automaton,
   AutomatonState,
   SequenceResult,
+  PdaSequenceResult,
 } from "./types";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -25,26 +26,47 @@ export const getSequenceArray = (input?: string) =>
 
 export const buildPreviewPayload = (values: FormValues) => {
   const sequences = getSequenceArray(values.sequences);
+  const patternValue = values.pattern?.trim() ?? "";
+  const isPdaMode = values.mode === "pda";
+  const rnaPrimaryEnabled = isPdaMode && values.allowDotBracket;
+  const shouldIncludePrimaryData = !isPdaMode || rnaPrimaryEnabled;
+  const secondaryStructures =
+    isPdaMode && patternValue
+      ? patternValue
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+      : [];
+
   const payload: Record<string, unknown> = {
     mode: values.mode,
     mismatch_budget: values.mode === "efa" ? values.mismatchBudget : 0,
-    allow_dot_bracket: values.mode === "pda" ? values.allowDotBracket : false,
+    allow_dot_bracket: isPdaMode ? true : false,
   };
 
-  // Only include pattern if it's provided or if allowDotBracket is false
-  if (values.pattern?.trim()) {
-    payload.pattern = values.pattern.trim();
+  if (isPdaMode && rnaPrimaryEnabled) {
+    payload.rna_mode = true;
   }
 
-  if (values.inputPath?.trim()) {
+  if (patternValue && (!isPdaMode || rnaPrimaryEnabled)) {
+    payload.pattern = patternValue;
+  }
+
+  if (isPdaMode && rnaPrimaryEnabled && secondaryStructures.length) {
+    payload.secondary_structures = secondaryStructures;
+  }
+
+  if (shouldIncludePrimaryData && values.inputPath?.trim()) {
     payload.input_path = values.inputPath.trim();
   }
 
-  if (sequences.length) {
+  if (shouldIncludePrimaryData && sequences.length) {
     payload.sequences = sequences;
+  } else if (!shouldIncludePrimaryData && secondaryStructures.length) {
+    payload.sequences = secondaryStructures;
   }
 
-  return { payload, sequences };
+  return { payload, sequences, secondaryStructures };
 };
 
 const parseSequenceText = (text: string): string => {
@@ -59,14 +81,35 @@ const parseSequenceText = (text: string): string => {
   }
 };
 
+type NormalizeResponseOptions = {
+  rnaPrimaryEnabled?: boolean;
+  secondaryStructures?: string[];
+};
+
+const sanitizeString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
+
+const sanitizeStringArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const cleaned = value
+    .map((item) => sanitizeString(item))
+    .filter((item): item is string => Boolean(item));
+  return cleaned.length ? cleaned : undefined;
+};
+
 export const normalizeResponse = (
   rawData: unknown,
   modeLabel: string,
   contextSequences: string[],
   mismatchBudget: number,
-  runtimeMs?: number
+  runtimeMs?: number,
+  options?: NormalizeResponseOptions
 ): NormalizedResult => {
   const data = isRecord(rawData) ? rawData : {};
+  const rnaPrimaryEnabled = options?.rnaPrimaryEnabled ?? false;
 
   // Check if this is the new API response format
   const isNewFormat =
@@ -171,16 +214,99 @@ export const normalizeResponse = (
         : [],
     };
 
+    const pdaDetails = new Map<number, PdaSequenceResult>();
+    if (Array.isArray(apiResponse.pda_sequences)) {
+      for (const detail of apiResponse.pda_sequences) {
+        if (
+          detail &&
+          typeof detail === "object" &&
+          typeof detail.sequence_number === "number"
+        ) {
+          pdaDetails.set(detail.sequence_number, detail);
+        }
+      }
+    }
+
+    const secondaryStructures = options?.secondaryStructures ?? [];
+
     const sequences: NormalizedSequence[] = apiResponse.sequences.map(
       (seqResult: SequenceResult, idx: number) => {
         const sequenceText = parseSequenceText(seqResult.sequence_text);
-        const sequence =
-          sequenceText || contextSequences[idx] || `Sequence ${idx + 1}`;
+        const normalizedSequenceText = sanitizeString(sequenceText);
+        const detail = pdaDetails.get(seqResult.sequence_number);
+        const fallbackSecondary =
+          sanitizeString(secondaryStructures[idx]) ??
+          sanitizeString(
+            secondaryStructures[seqResult.sequence_number - 1] ?? undefined
+          );
+        const dotBracket =
+          sanitizeString(detail?.dot_bracket) ??
+          sanitizeString(seqResult.dot_bracket) ??
+          fallbackSecondary ??
+          (!rnaPrimaryEnabled ? normalizedSequenceText : undefined);
+
+        const primarySequence = rnaPrimaryEnabled
+          ? sanitizeString(detail?.sequence) ??
+            sanitizeString(seqResult.rna_sequence) ??
+            contextSequences[idx] ??
+            contextSequences[seqResult.sequence_number - 1] ??
+            undefined
+          : undefined;
+
+        const rnaResult =
+          sanitizeString(detail?.result) ?? sanitizeString(seqResult.rna_result);
+        const accepted = rnaPrimaryEnabled
+          ? rnaResult
+            ? rnaResult.toLowerCase() === "valid"
+            : seqResult.has_matches
+          : seqResult.has_matches;
+
+        const rnaChecks =
+          sanitizeStringArray(detail?.checks) ??
+          sanitizeStringArray(seqResult.rna_checks) ??
+          undefined;
+
+        const rnaMessages =
+          sanitizeStringArray(detail?.messages) ??
+          sanitizeStringArray(seqResult.pda_messages) ??
+          sanitizeStringArray(seqResult.pda_validation?.messages) ??
+          undefined;
+
+        const validationValidBases =
+          typeof seqResult.pda_validation?.valid_rna_bases === "boolean"
+            ? seqResult.pda_validation.valid_rna_bases
+            : undefined;
+        const rnaValidBases =
+          typeof detail?.valid_rna_bases === "boolean"
+            ? detail.valid_rna_bases
+            : typeof seqResult.rna_valid_bases === "boolean"
+            ? seqResult.rna_valid_bases
+            : validationValidBases;
+
+        const displaySequence =
+          dotBracket ??
+          normalizedSequenceText ??
+          fallbackSecondary ??
+          primarySequence ??
+          contextSequences[idx] ??
+          contextSequences[seqResult.sequence_number - 1] ??
+          `Sequence ${seqResult.sequence_number}`;
+
+        const notes =
+          rnaPrimaryEnabled && rnaResult && rnaResult.length
+            ? `Secondary structure ${rnaResult.toLowerCase()}`
+            : rnaPrimaryEnabled && rnaMessages && rnaMessages.length
+            ? rnaMessages.join(" ")
+            : seqResult.has_matches
+            ? `${seqResult.match_count} match(es) found`
+            : "No matches";
 
         return {
           id: `${seqResult.sequence_number}`,
-          sequence,
-          accepted: seqResult.has_matches,
+          sequence: displaySequence,
+          primarySequence,
+          dotBracket,
+          accepted,
           matchRanges: seqResult.match_ranges,
           coverage: seqResult.coverage,
           statesVisited: seqResult.states_visited,
@@ -188,9 +314,15 @@ export const normalizeResponse = (
             seqResult.max_stack_depth !== null
               ? seqResult.max_stack_depth
               : undefined,
-          notes: seqResult.has_matches
-            ? `${seqResult.match_count} match(es) found`
-            : "No matches",
+          notes,
+          rnaResult,
+          rnaValidBases,
+          rnaChecks,
+          rnaMessages,
+          isRnaMode:
+            typeof seqResult.is_rna_mode === "boolean"
+              ? seqResult.is_rna_mode
+              : rnaPrimaryEnabled,
         };
       }
     );

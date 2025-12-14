@@ -57,6 +57,35 @@ export type SequenceResult = {
   sequence_number: number;
   sequence_text: string;
   states_visited: number;
+  rna_sequence?: string | null;
+  dot_bracket?: string | null;
+  rna_valid_bases?: boolean | null;
+  rna_checks?: string[] | null;
+  rna_result?: string | null;
+  is_rna_mode?: boolean | null;
+  pda_messages?: string[] | null;
+  pda_validation?: {
+    result?: string;
+    sequence?: string;
+    structure?: string;
+    valid_rna_bases?: boolean;
+    checks?: string[];
+    messages?: string[];
+  } | null;
+};
+
+export type PdaSequenceResult = {
+  sequence_number: number;
+  sequence: string;
+  dot_bracket?: string | null;
+  result?: string | null;
+  valid_rna_bases?: boolean | null;
+  checks?: string[] | null;
+  messages?: string[] | null;
+  coverage?: number;
+  match_count?: number;
+  has_matches?: boolean;
+  length?: number;
 };
 
 export type ApiResponse = {
@@ -73,11 +102,14 @@ export type ApiResponse = {
   sequences_with_matches: number;
   total_sequences: number;
   total_states_visited: number;
+  pda_sequences?: PdaSequenceResult[];
 };
 
 export type NormalizedSequence = {
   id: string;
   sequence: string;
+  primarySequence?: string;
+  dotBracket?: string;
   accepted?: boolean;
   mismatches?: number;
   mismatchPositions?: number[];
@@ -86,6 +118,11 @@ export type NormalizedSequence = {
   matchRanges?: MatchRange[];
   coverage?: number;
   statesVisited?: number;
+  rnaResult?: string;
+  rnaValidBases?: boolean;
+  rnaChecks?: string[];
+  rnaMessages?: string[];
+  isRnaMode?: boolean;
 };
 
 export type TraceItem = {
@@ -127,4 +164,6 @@ export type SimulationVariables = {
   contextSequences: string[];
   modeLabel: string;
   mismatchBudget: number;
+  rnaPrimaryEnabled: boolean;
+  secondaryStructures: string[];
 };

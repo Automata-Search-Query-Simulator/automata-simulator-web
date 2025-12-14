@@ -45,13 +45,35 @@ export const useSimulate = (options?: UseSimulateOptions) => {
         return parts.join("&");
       };
 
-      const response = await apiClient.get(SIMULATE_ENDPOINT, {
-        params,
-        paramsSerializer,
-        signal: controller.signal,
-      });
-      const runtimeMs = Math.round(Date.now() - startedAt);
-      return { data: response.data, runtimeMs };
+      const queryString = paramsSerializer(params);
+      const endpointUrl = `${API_BASE_URL}${SIMULATE_ENDPOINT}${
+        queryString ? `?${queryString}` : ""
+      }`;
+      console.log(`[API] GET ${endpointUrl}`);
+
+      try {
+        const response = await apiClient.get(SIMULATE_ENDPOINT, {
+          params,
+          paramsSerializer,
+          signal: controller.signal,
+        });
+        const runtimeMs = Math.round(Date.now() - startedAt);
+        console.log(
+          `[API] ✓ ${endpointUrl} [${response.status}] (${runtimeMs} ms)`
+        );
+        return { data: response.data, runtimeMs };
+      } catch (error) {
+        const runtimeMs = Math.round(Date.now() - startedAt);
+        const message = axios.isAxiosError(error)
+          ? error.message
+          : error instanceof Error
+          ? error.message
+          : "Unknown error";
+        console.error(
+          `[API] ✗ ${endpointUrl} (${runtimeMs} ms) -> ${message}`
+        );
+        throw error;
+      }
     },
   });
 
@@ -60,8 +82,11 @@ export const useSimulate = (options?: UseSimulateOptions) => {
     modeLabel: string,
     controller: AbortController
   ) => {
-    const { payload, sequences } = buildPreviewPayload(values);
+    const { payload, sequences, secondaryStructures } =
+      buildPreviewPayload(values);
     const mismatchBudget = values.mode === "efa" ? values.mismatchBudget : 0;
+    const rnaPrimaryEnabled =
+      values.mode === "pda" ? values.allowDotBracket : false;
 
     mutation.mutate(
       {
@@ -70,6 +95,8 @@ export const useSimulate = (options?: UseSimulateOptions) => {
         contextSequences: sequences,
         modeLabel,
         mismatchBudget,
+        rnaPrimaryEnabled,
+        secondaryStructures,
       },
       {
         onSuccess: (payloadResult, variables) => {
@@ -78,7 +105,11 @@ export const useSimulate = (options?: UseSimulateOptions) => {
             variables.modeLabel,
             variables.contextSequences,
             variables.mismatchBudget,
-            payloadResult.runtimeMs
+            payloadResult.runtimeMs,
+            {
+              rnaPrimaryEnabled: variables.rnaPrimaryEnabled,
+              secondaryStructures: variables.secondaryStructures,
+            }
           );
           options?.onSuccess?.(normalized);
         },

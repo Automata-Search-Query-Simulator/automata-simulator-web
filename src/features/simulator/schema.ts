@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { DNA_REGEX, MODE_VALUES } from "./constants";
 
+const DNA_PATTERN_BASES = new Set(["A", "C", "G", "T"]);
+const ALPHA_CHAR_REGEX = /[A-Z]/;
+
 export const formSchema = z
   .object({
     mode: z.enum(MODE_VALUES),
@@ -11,7 +14,14 @@ export const formSchema = z
     allowDotBracket: z.boolean(),
   })
   .superRefine((data, ctx) => {
-    if (!data.sequences?.trim() && !data.inputPath?.trim()) {
+    const requiresPrimaryInput =
+      data.mode !== "pda" || (data.mode === "pda" && data.allowDotBracket);
+
+    if (
+      requiresPrimaryInput &&
+      !data.sequences?.trim() &&
+      !data.inputPath?.trim()
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["sequences"],
@@ -24,13 +34,28 @@ export const formSchema = z
       });
     }
 
-    // Pattern is required unless allowDotBracket is true
-    if (!data.allowDotBracket && (!data.pattern || !data.pattern.trim())) {
+    if (!data.pattern || !data.pattern.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["pattern"],
         message: "Pattern required",
       });
+    }
+
+    const requiresDnaAlphabet =
+      data.mode === "nfa" || data.mode === "dfa" || data.mode === "efa";
+    if (requiresDnaAlphabet && data.pattern?.trim()) {
+      const normalized = data.pattern.toUpperCase();
+      const invalidChar = Array.from(normalized).find(
+        (char) => ALPHA_CHAR_REGEX.test(char) && !DNA_PATTERN_BASES.has(char)
+      );
+      if (invalidChar) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pattern"],
+          message: "DNA patterns must only use A, C, G, or T characters.",
+        });
+      }
     }
 
     if (data.mode !== "pda" && data.sequences?.trim()) {
